@@ -31,8 +31,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
-      padding: 8px;
+      justify-content: space-between;
+      padding: 6px;
     }
 
     /* Board Frame */
@@ -129,7 +129,7 @@
     .panel-box {
       background: #23262c;
       border: 2px solid #32363f;
-      border-radius: 12px;
+      border-radius: 10px;
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.4);
     }
 
@@ -159,8 +159,8 @@
 
     /* Palette Selection Styling */
     .palette-item {
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -187,8 +187,8 @@
     .toggle-switch {
       position: relative;
       display: inline-block;
-      width: 44px;
-      height: 24px;
+      width: 40px;
+      height: 22px;
     }
 
     .toggle-switch input {
@@ -203,15 +203,15 @@
       top: 0; left: 0; right: 0; bottom: 0;
       background-color: #374151;
       transition: .3s;
-      border-radius: 24px;
+      border-radius: 22px;
       border: 1px solid #4b5563;
     }
 
     .slider-track:before {
       position: absolute;
       content: "";
-      height: 18px;
-      width: 18px;
+      height: 16px;
+      width: 16px;
       left: 2px;
       bottom: 2px;
       background-color: white;
@@ -225,7 +225,7 @@
     }
 
     input:checked + .slider-track:before {
-      transform: translateX(20px);
+      transform: translateX(18px);
       background-color: #0f172a;
     }
 
@@ -250,78 +250,66 @@
     }
   </style>
 </head>
-<body class="w-full">
+<body class="w-full h-full">
 
-  <!-- Main Simulator Container -->
-  <div class="w-full max-w-sm md:max-w-4xl flex flex-col items-center justify-center gap-2.5 my-auto">
+  <!-- Main Simulator Container (本家風に上部UI、下部盤面へ並び替え) -->
+  <div class="w-full max-w-sm md:max-w-xl flex flex-col justify-between items-center h-full py-1">
 
-    <!-- Right / Main Board Section (スマホで操作しやすいよう上部に配置) -->
-    <div class="flex flex-col items-center">
-      <div id="board-frame" class="board-container">
-        <!-- Grid Cells Background -->
-        <div id="grid-background" class="grid-background"></div>
-        <!-- Orbs Layer -->
-        <div id="board-grid" class="relative w-full h-full z-10"></div>
-      </div>
-    </div>
-
-    <!-- Control Panel -->
-    <div class="w-full max-w-[360px] md:w-80 flex flex-col gap-2">
+    <!-- Top Area: Status & Settings Control -->
+    <div class="w-full flex flex-col gap-1.5">
       <!-- Title & Main Stats -->
-      <div class="panel-box p-2.5 flex flex-col gap-1.5">
+      <div class="panel-box p-2 flex flex-col gap-1">
         <div class="flex items-center justify-between">
-          <h1 class="text-sm font-black text-amber-100 tracking-wider">
-            PUZZLE & DRAGONS
+          <h1 class="text-xs font-black text-amber-100 tracking-wider">
+            PUZZLE & DRAGONS SIMULATOR
           </h1>
-          <span id="no-skyfall-badge" class="hidden text-[10px] bg-red-900/80 text-red-200 border border-red-500/50 px-1.5 py-0.5 rounded font-bold">落ちコンなし</span>
+          <span id="no-skyfall-badge" class="hidden text-[9px] bg-red-900/80 text-red-200 border border-red-500/50 px-1 py-0.2 rounded font-bold">落ちコンなし</span>
         </div>
 
-        <div class="flex justify-between items-center text-xs font-bold text-slate-300">
+        <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
           <span>タイマー: [<span id="timer-setting-label" class="text-green-400">8.0s</span>]</span>
-          <span id="timer-text" class="text-green-400 text-sm">8.0s</span>
+          <span id="timer-text" class="text-green-400 text-xs font-bold">8.0s</span>
         </div>
 
         <!-- Timer Bar -->
-        <div class="w-full h-2.5 bg-slate-900 rounded-full p-0.5 border border-slate-700/80 overflow-hidden">
+        <div class="w-full h-2 bg-slate-900 rounded-full p-0.5 border border-slate-700/80 overflow-hidden">
           <div id="timer-bar" class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full timer-bar-fill w-full"></div>
         </div>
 
-        <div class="flex justify-between items-center pt-1 border-t border-slate-700/60">
-          <span class="text-xs font-bold text-slate-300">COMBO:</span>
-          <span id="combo-display" class="text-xl font-black text-amber-400 leading-none">0</span>
+        <div class="flex justify-between items-center pt-0.5 border-t border-slate-700/60">
+          <span class="text-[11px] font-bold text-slate-300">COMBO:</span>
+          <span id="combo-display" class="text-lg font-black text-amber-400 leading-none">0</span>
         </div>
       </div>
 
-      <!-- Settings Panel -->
-      <div class="panel-box p-2 flex flex-col gap-1.5">
+      <!-- Settings Panel (Compact) -->
+      <div class="panel-box p-1.5 flex flex-col gap-1">
         <!-- Operation Time Customization -->
-        <div class="flex flex-col gap-1">
-          <div class="flex justify-between items-center text-xs font-bold text-slate-300">
+        <div class="flex flex-col gap-0.5">
+          <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
             <span>操作時間:</span>
             <div class="flex items-center gap-1">
               <input type="number" id="time-input" min="1" max="60" step="0.5" value="8" 
-                     class="w-14 bg-slate-900 border border-slate-600 rounded px-1 py-0.5 text-right text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400">
+                     class="w-12 bg-slate-900 border border-slate-600 rounded px-1 py-0.2 text-right text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400">
               <span class="text-slate-400">秒</span>
             </div>
           </div>
           
           <input type="range" id="time-slider" min="1" max="30" step="0.5" value="8" 
-                 class="w-full accent-amber-400 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                 class="w-full accent-amber-400 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer">
 
           <!-- Time Presets -->
           <div class="flex gap-1 justify-between">
-            <button data-time="5" class="time-btn flex-1 py-1 rounded bg-slate-800 text-slate-300 font-bold text-xs">5s</button>
-            <button data-time="8" class="time-btn flex-1 py-1 rounded bg-amber-500 text-slate-900 font-bold text-xs">8s</button>
-            <button data-time="12" class="time-btn flex-1 py-1 rounded bg-slate-800 text-slate-300 font-bold text-xs">12s</button>
-            <button data-time="20" class="time-btn flex-1 py-1 rounded bg-slate-800 text-slate-300 font-bold text-xs">20s</button>
+            <button data-time="5" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">5s</button>
+            <button data-time="8" class="time-btn flex-1 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[10px]">8s</button>
+            <button data-time="12" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">12s</button>
+            <button data-time="20" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">20s</button>
           </div>
         </div>
 
-        <!-- No Skyfall Toggle Option -->
+        <!-- No Skyfall Toggle Option & Mode Buttons -->
         <div class="flex items-center justify-between pt-1 border-t border-slate-700/60">
-          <div class="flex flex-col">
-            <span class="text-xs font-bold text-slate-200">落ちコンなし</span>
-          </div>
+          <span class="text-[11px] font-bold text-slate-200">落ちコンなし</span>
           <label class="toggle-switch">
             <input type="checkbox" id="toggle-no-skyfall">
             <span class="slider-track"></span>
@@ -330,23 +318,23 @@
       </div>
 
       <!-- Action Buttons Grid -->
-      <div class="grid grid-cols-2 gap-1.5">
-        <button id="btn-edit-mode" class="btn-custom py-1.5 px-2 text-xs uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
+      <div class="grid grid-cols-3 gap-1">
+        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-3 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
           ✏️ EDIT MODE (盤面編集)
         </button>
-        <button id="btn-reset" class="btn-custom py-1.5 px-2 text-xs uppercase tracking-wider">
+        <button id="btn-reset" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider">
           🔄 リセット
         </button>
-        <button id="btn-toggle-grid" class="btn-custom py-1.5 px-2 text-xs uppercase tracking-wider">
-          📐 6x5 / 7x6
+        <button id="btn-toggle-grid" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2">
+          📐 6x5 / 7x6 切替
         </button>
       </div>
 
       <!-- Custom Edit Mode Palette (Hidden by default) -->
-      <div id="edit-palette-panel" class="panel-box p-2 hidden flex-col gap-1.5 border-amber-500/40">
-        <div class="text-xs font-bold text-amber-300 flex justify-between items-center">
+      <div id="edit-palette-panel" class="panel-box p-1.5 hidden flex-col gap-1 border-amber-500/40">
+        <div class="text-[11px] font-bold text-amber-300 flex justify-between items-center">
           <span>ペイントドロップ選択:</span>
-          <button id="btn-fill-all" class="text-[10px] bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-1.5 py-0.5 rounded">
+          <button id="btn-fill-all" class="text-[9px] bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-1 py-0.2 rounded">
             全埋め
           </button>
         </div>
@@ -359,6 +347,16 @@
           <div class="palette-item orb-dark" data-type="dark"></div>
           <div class="palette-item orb-heal" data-type="heal"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Bottom Area: Main Puzzle Board (本家風に最下部に配置) -->
+    <div class="flex flex-col items-center mt-1">
+      <div id="board-frame" class="board-container">
+        <!-- Grid Cells Background -->
+        <div id="grid-background" class="grid-background"></div>
+        <!-- Orbs Layer -->
+        <div id="board-grid" class="relative w-full h-full z-10"></div>
       </div>
     </div>
 
@@ -512,7 +510,7 @@
     const noSkyfallBadge = document.getElementById('no-skyfall-badge');
 
     function calculateOrbSize() {
-      // スマホ画面幅に最適フィットさせる（余白を考慮）
+      // 画面横幅に合わせて適切なサイズを算出
       const maxWidth = Math.min(window.innerWidth - 16, 420);
       orbSize = Math.floor((maxWidth - 8) / COLS);
 
@@ -771,9 +769,9 @@
 
       timeBtns.forEach(b => {
         if (parseFloat(b.dataset.time) === numVal) {
-          b.className = 'time-btn flex-1 py-1 rounded bg-amber-500 text-slate-900 font-bold text-xs';
+          b.className = 'time-btn flex-1 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[10px]';
         } else {
-          b.className = 'time-btn flex-1 py-1 rounded bg-slate-800 text-slate-300 font-bold text-xs';
+          b.className = 'time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]';
         }
       });
 
