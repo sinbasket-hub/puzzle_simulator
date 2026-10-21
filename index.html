@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Puzzle & Dragons Simulator</title>
+  <title>Puzzle Simulator</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700;900&family=Noto+Sans+JP:wght@700;900&display=swap');
@@ -299,7 +299,7 @@
 
   <div id="start-screen">
     <div class="text-center px-4" style="position: relative; z-index: 10000;">
-      <h1 class="start-title">PUZZLE & DRAGONS<br><span class="text-xl text-slate-300 font-bold">SIMULATOR</span></h1>
+      <h1 class="start-title">PUZZLE SIMULATOR</h1>
       <button id="btn-game-start" class="start-btn">GAME START</button>
     </div>
   </div>
@@ -309,7 +309,7 @@
       <div class="panel-box p-2 flex flex-col gap-1">
         <div class="flex items-center justify-between">
           <h1 class="text-xs font-black text-amber-100 tracking-wider">
-            PUZZLE & DRAGONS SIMULATOR
+            PUZZLE SIMULATOR
           </h1>
           <span id="no-skyfall-badge" class="hidden text-[9px] bg-red-900/80 text-red-200 border border-red-500/50 px-1 py-0.2 rounded font-bold">落ちコンなし</span>
         </div>
@@ -351,7 +351,6 @@
           </div>
         </div>
 
-        <!-- 落ちコンなし & BGM切替トグル -->
         <div class="flex flex-col gap-1 pt-1 border-t border-slate-700/60">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold text-slate-200">落ちコンなし</span>
@@ -437,7 +436,6 @@
         if (!enabled) {
           this.bgm.pause();
         } else {
-          // ゲームがすでに始まっていれば再生を再開
           if (startScreen.style.display === 'none') {
             this.bgm.play().catch(e => {});
           }
