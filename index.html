@@ -351,12 +351,22 @@
           </div>
         </div>
 
-        <div class="flex items-center justify-between pt-1 border-t border-slate-700/60">
-          <span class="text-[11px] font-bold text-slate-200">落ちコンなし</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-no-skyfall">
-            <span class="slider-track"></span>
-          </label>
+        <!-- 落ちコンなし & BGM切替トグル -->
+        <div class="flex flex-col gap-1 pt-1 border-t border-slate-700/60">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-200">落ちコンなし</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-no-skyfall">
+              <span class="slider-track"></span>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-200">🎵 BGM (ON / OFF)</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-bgm" checked>
+              <span class="slider-track"></span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -407,6 +417,7 @@
         this.bgm.loop = true;
         this.bgm.volume = 0.5;
         this.bgm.preload = 'auto';
+        this.isBgmEnabled = true;
       }
 
       init() {
@@ -418,6 +429,18 @@
         }
         if (this.ctx && this.ctx.state === 'suspended') {
           this.ctx.resume();
+        }
+      }
+
+      setBgmEnabled(enabled) {
+        this.isBgmEnabled = enabled;
+        if (!enabled) {
+          this.bgm.pause();
+        } else {
+          // ゲームがすでに始まっていれば再生を再開
+          if (startScreen.style.display === 'none') {
+            this.bgm.play().catch(e => {});
+          }
         }
       }
 
@@ -492,6 +515,7 @@
       }
 
       playDungeonBGM() {
+        if (!this.isBgmEnabled) return;
         this.bgm.currentTime = 0;
         const playPromise = this.bgm.play();
         if (playPromise !== undefined) {
@@ -557,6 +581,7 @@
     const timeInput = document.getElementById('time-input');
     const timeSlider = document.getElementById('time-slider');
     const toggleNoSkyfall = document.getElementById('toggle-no-skyfall');
+    const toggleBgm = document.getElementById('toggle-bgm');
     const noSkyfallBadge = document.getElementById('no-skyfall-badge');
 
     function calculateOrbSize() {
@@ -1107,7 +1132,7 @@
 
     timeBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const val = parseFloat(e.currentTarget.dataset.time);
+        const val = parseFloat(e.dataset.time);
         setCustomMoveTime(val);
       });
     });
@@ -1127,6 +1152,10 @@
       } else {
         noSkyfallBadge.classList.add('hidden');
       }
+    });
+
+    toggleBgm.addEventListener('change', (e) => {
+      sfx.setBgmEnabled(e.target.checked);
     });
 
     window.addEventListener('resize', () => {
