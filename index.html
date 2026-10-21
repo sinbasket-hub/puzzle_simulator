@@ -419,7 +419,6 @@
     class SoundEffects {
       constructor() {
         this.ctx = null;
-        // 指定された2つの音声ファイルを読み込み
         this.bgm1 = new Audio('Steps_to_the_Sunken_Spire.mp3');
         this.bgm2 = new Audio('The_Final_Cascade_BOSS.mp3');
         
@@ -975,13 +974,11 @@
 
     async function processBoardCombos() {
       isProcessingCombos = true;
-      let boardHasMatches = true;
 
-      while (boardHasMatches) {
+      while (true) {
         const matches = findMatches();
 
         if (matches.length === 0) {
-          boardHasMatches = false;
           break;
         }
 
@@ -1021,7 +1018,16 @@
 
         await applyGravity();
 
-        if (!noSkyfall) {
+        // 落ちコンなし設定の場合、もし盤面内での連鎖（落とし消し）がこれ以上なくなったら、
+        // 最後に一度だけランダムなドロップを補充してループを抜ける
+        if (noSkyfall) {
+          const nextMatches = findMatches();
+          if (nextMatches.length === 0) {
+            await spawnSkyfallOrbs();
+            break;
+          }
+        } else {
+          // 通常時は通常の落ちコン補充処理
           await spawnSkyfallOrbs();
         }
       }
