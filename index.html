@@ -351,7 +351,7 @@
           </div>
         </div>
 
-        <div class="flex flex-col gap-1 pt-1 border-t border-slate-700/60">
+        <div class="flex flex-col gap-1.5 pt-1 border-t border-slate-700/60">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold text-slate-200">落ちコンなし</span>
             <label class="toggle-switch">
@@ -365,6 +365,13 @@
               <input type="checkbox" id="toggle-bgm" checked>
               <span class="slider-track"></span>
             </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-200">🎶 曲選択</span>
+            <div class="flex gap-1">
+              <button data-song="1" class="song-btn px-2 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[9px]">Spire (道中)</button>
+              <button data-song="2" class="song-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]">Boss (ボス)</button>
+            </div>
           </div>
         </div>
       </div>
@@ -412,11 +419,22 @@
     class SoundEffects {
       constructor() {
         this.ctx = null;
-        this.bgm = new Audio('ANewJourney.mp3');
-        this.bgm.loop = true;
-        this.bgm.volume = 0.5;
-        this.bgm.preload = 'auto';
+        // 指定された2つの音声ファイルを読み込み
+        this.bgm1 = new Audio('Steps_to_the_Sunken_Spire.mp3');
+        this.bgm2 = new Audio('The_Final_Cascade_BOSS.mp3');
+        
+        [this.bgm1, this.bgm2].forEach(audio => {
+          audio.loop = true;
+          audio.volume = 0.5;
+          audio.preload = 'auto';
+        });
+
+        this.currentSongIndex = 1;
         this.isBgmEnabled = true;
+      }
+
+      getCurrentBgm() {
+        return this.currentSongIndex === 1 ? this.bgm1 : this.bgm2;
       }
 
       init() {
@@ -433,12 +451,27 @@
 
       setBgmEnabled(enabled) {
         this.isBgmEnabled = enabled;
+        const currentBgm = this.getCurrentBgm();
         if (!enabled) {
-          this.bgm.pause();
+          currentBgm.pause();
         } else {
           if (startScreen.style.display === 'none') {
-            this.bgm.play().catch(e => {});
+            currentBgm.play().catch(e => {});
           }
+        }
+      }
+
+      switchSong(songIndex) {
+        const currentBgm = this.getCurrentBgm();
+        currentBgm.pause();
+        currentBgm.currentTime = 0;
+
+        this.currentSongIndex = songIndex;
+        const newBgm = this.getCurrentBgm();
+
+        if (this.isBgmEnabled && startScreen.style.display === 'none') {
+          newBgm.currentTime = 0;
+          newBgm.play().catch(e => {});
         }
       }
 
@@ -514,8 +547,9 @@
 
       playDungeonBGM() {
         if (!this.isBgmEnabled) return;
-        this.bgm.currentTime = 0;
-        const playPromise = this.bgm.play();
+        const currentBgm = this.getCurrentBgm();
+        currentBgm.currentTime = 0;
+        const playPromise = currentBgm.play();
         if (playPromise !== undefined) {
           playPromise.catch(error => {
             console.log("BGMの自動再生がブロックされました", error);
@@ -580,6 +614,7 @@
     const timeSlider = document.getElementById('time-slider');
     const toggleNoSkyfall = document.getElementById('toggle-no-skyfall');
     const toggleBgm = document.getElementById('toggle-bgm');
+    const songBtns = document.querySelectorAll('.song-btn');
     const noSkyfallBadge = document.getElementById('no-skyfall-badge');
 
     function calculateOrbSize() {
@@ -1154,6 +1189,17 @@
 
     toggleBgm.addEventListener('change', (e) => {
       sfx.setBgmEnabled(e.target.checked);
+    });
+
+    songBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const songNum = parseInt(e.currentTarget.dataset.song);
+        songBtns.forEach(b => {
+          b.className = 'song-btn px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]';
+        });
+        e.currentTarget.className = 'song-btn px-2 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[9px]';
+        sfx.switchSong(songNum);
+      });
     });
 
     window.addEventListener('resize', () => {
