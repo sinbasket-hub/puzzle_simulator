@@ -903,6 +903,17 @@
       dragStartTime = Date.now();
       recordedFramePath = [];
 
+      // 始点グリッドの正確な中心座標を記録
+      const exactStartX = (col + 0.5) * orbSize;
+      const exactStartY = (row + 0.5) * orbSize;
+      recordedFramePath.push({
+        t: 0,
+        nx: Math.round((exactStartX / (orbSize * COLS)) * 1000) / 1000,
+        ny: Math.round((exactStartY / (orbSize * ROWS)) * 1000) / 1000,
+        startRow: row,
+        startCol: col
+      });
+
       dragPointerMove(clientX, clientY);
 
       window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -1321,7 +1332,7 @@
       }
     }
 
-    // --- 超可変Bit-packing & 高精度連続軌跡復元エンジン ---
+    // --- 高精度始点グリッド固定 Bit-packing 圧縮 ---
     function compressReplayToCompactString(rep) {
       const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
       let bitBuf = "";
@@ -1521,8 +1532,14 @@
       const relX = firstPt.nx !== undefined ? firstPt.nx * (orbSize * COLS) : firstPt.x;
       const relY = firstPt.ny !== undefined ? firstPt.ny * (orbSize * ROWS) : firstPt.y;
 
-      const startCol = Math.max(0, Math.min(COLS - 1, Math.floor(relX / orbSize)));
-      const startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(relY / orbSize)));
+      let startCol, startRow;
+      if (firstPt.startCol !== undefined && firstPt.startRow !== undefined) {
+        startCol = firstPt.startCol;
+        startRow = firstPt.startRow;
+      } else {
+        startCol = Math.max(0, Math.min(COLS - 1, Math.floor(relX / orbSize)));
+        startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(relY / orbSize)));
+      }
       
       const grabbedOrb = gridMatrix[startRow][startCol] || gridMatrix[0][0];
       grabbedOrb.element.classList.add('dragging');
