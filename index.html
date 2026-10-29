@@ -14,7 +14,7 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
-      touch-action: manipulation;
+      touch-action: none;
     }
 
     * {
@@ -128,11 +128,12 @@
         inset 0 4px 6px rgba(255, 255, 255, 0.75),
         inset 0 -6px 10px rgba(0, 0, 0, 0.65),
         0 4px 8px rgba(0, 0, 0, 0.6);
-      transition: transform 0.12s ease-out, left 0.12s ease-out, top 0.12s ease-out, opacity 0.2s ease, scale 0.2s ease;
+      transition: transform 0.08s ease-out, opacity 0.15s ease;
       cursor: grab;
-      will-change: transform, left, top;
+      will-change: left, top;
       z-index: 10;
       touch-action: none;
+      pointer-events: auto;
     }
 
     .orb::before {
@@ -148,10 +149,10 @@
     }
 
     .orb.dragging {
-      transition: none !important;
       z-index: 1000 !important;
       cursor: grabbing;
-      scale: 1.15;
+      transform: scale(1.18);
+      transition: none !important;
       box-shadow: 
         inset 0 6px 10px rgba(255, 255, 255, 0.9),
         inset 0 -10px 14px rgba(0, 0, 0, 0.7),
@@ -164,7 +165,15 @@
     .orb-wood { background: radial-gradient(circle at 35% 30%, #69f0ae 0%, #388e3c 60%, #1b5e20 100%); }
     .orb-light { background: radial-gradient(circle at 35% 30%, #ffff8d 0%, #fbc02d 60%, #9a6700 100%); }
     .orb-dark { background: radial-gradient(circle at 35% 30%, #e040fb 0%, #7b1fa2 60%, #4a0072 100%); }
-    .orb-heal { background: radial-gradient(circle at 35% 30%, #ff80ab 0%, #c2185b 60%, #70002b 100%); }
+    
+    /* ハート（回復）ドロップを四角形状に変更 */
+    .orb-heal { 
+      background: radial-gradient(circle at 35% 30%, #ff80ab 0%, #c2185b 60%, #70002b 100%); 
+      border-radius: 20%;
+    }
+    .orb-heal::before {
+      border-radius: 20%;
+    }
 
     .orb svg {
       width: 58%;
@@ -216,6 +225,10 @@
       position: relative;
       border: 2px solid transparent;
       transition: transform 0.1s, border-color 0.1s;
+    }
+
+    .palette-item.orb-heal {
+      border-radius: 20%;
     }
 
     .palette-item.selected {
@@ -293,6 +306,17 @@
       transition: width 0.05s linear;
       box-shadow: 0 0 8px rgba(74, 222, 128, 0.8);
     }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
   </style>
 </head>
 <body class="w-full h-full">
@@ -311,7 +335,10 @@
           <h1 class="text-xs font-black text-amber-100 tracking-wider">
             PUZZLE SIMULATOR
           </h1>
-          <span id="no-skyfall-badge" class="hidden text-[9px] bg-red-900/80 text-red-200 border border-red-500/50 px-1 py-0.2 rounded font-bold">落ちコンなし</span>
+          <div class="flex items-center gap-1">
+            <span id="replay-status-badge" class="hidden text-[9px] bg-amber-600/90 text-amber-100 border border-amber-400 px-1.5 py-0.2 rounded font-bold animate-pulse">🎬 再生中</span>
+            <span id="no-skyfall-badge" class="hidden text-[9px] bg-red-900/80 text-red-200 border border-red-500/50 px-1 py-0.2 rounded font-bold">落ちコンなし</span>
+          </div>
         </div>
 
         <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
@@ -334,9 +361,9 @@
           <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
             <span>操作時間:</span>
             <div class="flex items-center gap-1">
-              <input type="number" id="time-input" min="1" max="60" step="0.5" value="8" 
-                     class="w-12 bg-slate-900 border border-slate-600 rounded px-1 py-0.2 text-right text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400">
-              <span class="text-slate-400">秒</span>
+              <input type="text" id="time-input" value="8" 
+                     class="w-14 bg-slate-900 border border-slate-600 rounded px-1 py-0.2 text-right text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400">
+              <span class="text-slate-400" id="time-unit-label">秒</span>
             </div>
           </div>
           
@@ -344,10 +371,11 @@
                  class="w-full accent-amber-400 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer">
 
           <div class="flex gap-1 justify-between">
-            <button data-time="5" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">5s</button>
-            <button data-time="8" class="time-btn flex-1 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[10px]">8s</button>
-            <button data-time="12" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">12s</button>
-            <button data-time="20" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]">20s</button>
+            <button data-time="5" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]">5s</button>
+            <button data-time="8" class="time-btn flex-1 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[9px]">8s</button>
+            <button data-time="12" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]">12s</button>
+            <button data-time="20" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]">20s</button>
+            <button data-time="inf" class="time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]">制限なし</button>
           </div>
         </div>
 
@@ -362,7 +390,7 @@
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold text-slate-200">🎵 BGM (ON / OFF)</span>
             <label class="toggle-switch">
-              <input type="checkbox" id="toggle-bgm" checked>
+              <input type="checkbox" id="toggle-bgm">
               <span class="slider-track"></span>
             </label>
           </div>
@@ -376,15 +404,21 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-3 gap-1">
-        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-3 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
+      <div class="grid grid-cols-2 gap-1">
+        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
           ✏️ EDIT MODE (盤面編集)
+        </button>
+        <button id="btn-retry" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider bg-emerald-700/60 border-emerald-500/60 text-emerald-200">
+          ↩️ やり直す
         </button>
         <button id="btn-reset" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider">
           🔄 リセット
         </button>
         <button id="btn-toggle-grid" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2">
           📐 6x5 / 7x6 切替
+        </button>
+        <button id="btn-open-replays" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 bg-amber-600/40 border-amber-500/60 text-amber-200">
+          📼 リプレイ管理・共有
         </button>
       </div>
 
@@ -415,6 +449,32 @@
     </div>
   </div>
 
+  <!-- Replay Modal -->
+  <div id="replay-modal" class="modal-overlay hidden">
+    <div class="panel-box p-4 w-11/12 max-w-md flex flex-col gap-3 bg-[#1d1e24] border-amber-500/50 max-h-[85vh]">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+        <h2 class="text-sm font-black text-amber-300">📼 リプレイ管理 & 共有</h2>
+        <div class="flex items-center gap-2">
+          <button id="btn-delete-all-replays" class="text-[10px] bg-red-900/80 hover:bg-red-800 text-red-200 border border-red-500/50 px-2 py-0.5 rounded font-bold">🗑️ すべて削除</button>
+          <button id="btn-close-modal" class="text-slate-400 hover:text-white font-bold text-sm px-1">✕</button>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2 overflow-y-auto max-h-56 pr-1" id="replay-list-container">
+        <div class="text-xs text-slate-400 text-center py-4">保存されたリプレイはありません</div>
+      </div>
+
+      <div class="flex flex-col gap-1.5 pt-2 border-t border-slate-700">
+        <span class="text-[11px] font-bold text-slate-300">🔗 共有リンク (URL):</span>
+        <div class="flex gap-1">
+          <input type="text" id="share-url-input" readonly placeholder="リプレイを選択してリンクを生成" 
+                 class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none">
+          <button id="btn-copy-url" class="btn-custom px-3 py-1 text-xs bg-amber-500 text-slate-900 font-bold whitespace-nowrap">コピー</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     class SoundEffects {
       constructor() {
@@ -429,7 +489,7 @@
         });
 
         this.currentSongIndex = 1;
-        this.isBgmEnabled = true;
+        this.isBgmEnabled = false;
       }
 
       getCurrentBgm() {
@@ -550,9 +610,7 @@
         currentBgm.currentTime = 0;
         const playPromise = currentBgm.play();
         if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.log("BGMの自動再生がブロックされました", error);
-          });
+          playPromise.catch(error => {});
         }
       }
     }
@@ -571,18 +629,24 @@
     let COLS = 6;
     let ROWS = 5;
     let maxMoveTime = 8.0;
+    let isInfiniteTime = false;
     let timeRemaining = maxMoveTime;
     let isDragging = false;
     let isProcessingCombos = false;
     let isEditMode = false;
+    let isReplaying = false;
     let noSkyfall = false;
     let selectedPaintType = 'fire';
     let activeOrb = null;
     let orbSize = 50;
-    let boardState = [];
+    let gridMatrix = [];
     let orbIdCounter = 0;
     let comboCount = 0;
     let timerInterval = null;
+
+    let currentInitialBoard = [];
+    let recordedFramePath = [];
+    let dragStartTime = 0;
 
     const ORB_TYPES = ['fire', 'water', 'wood', 'light', 'dark', 'heal'];
     const TYPE_COLORS = { 
@@ -603,6 +667,7 @@
     const timerText = document.getElementById('timer-text');
     const timerBar = document.getElementById('timer-bar');
     const timerSettingLabel = document.getElementById('timer-setting-label');
+    const btnRetry = document.getElementById('btn-retry');
     const btnReset = document.getElementById('btn-reset');
     const btnToggleGrid = document.getElementById('btn-toggle-grid');
     const btnEditMode = document.getElementById('btn-edit-mode');
@@ -610,11 +675,20 @@
     const btnFillAll = document.getElementById('btn-fill-all');
     const timeBtns = document.querySelectorAll('.time-btn');
     const timeInput = document.getElementById('time-input');
+    const timeUnitLabel = document.getElementById('time-unit-label');
     const timeSlider = document.getElementById('time-slider');
     const toggleNoSkyfall = document.getElementById('toggle-no-skyfall');
     const toggleBgm = document.getElementById('toggle-bgm');
     const songBtns = document.querySelectorAll('.song-btn');
     const noSkyfallBadge = document.getElementById('no-skyfall-badge');
+    const replayStatusBadge = document.getElementById('replay-status-badge');
+    const btnOpenReplays = document.getElementById('btn-open-replays');
+    const replayModal = document.getElementById('replay-modal');
+    const btnCloseModal = document.getElementById('btn-close-modal');
+    const btnDeleteAllReplays = document.getElementById('btn-delete-all-replays');
+    const replayListContainer = document.getElementById('replay-list-container');
+    const shareUrlInput = document.getElementById('share-url-input');
+    const btnCopyUrl = document.getElementById('btn-copy-url');
 
     function calculateOrbSize() {
       const maxWidth = Math.min(window.innerWidth - 16, 420);
@@ -635,23 +709,59 @@
       }
     }
 
-    function initBoard() {
-      if (isProcessingCombos) return;
+    function initBoard(presetTypes = null) {
+      if (isProcessingCombos || isReplaying) return;
       calculateOrbSize();
       boardGrid.innerHTML = '';
-      boardState = [];
+      
+      gridMatrix = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
       comboCount = 0;
       comboDisplay.textContent = '0';
+      recordedFramePath = [];
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
-          const type = ORB_TYPES[Math.floor(Math.random() * ORB_TYPES.length)];
+          const type = presetTypes ? presetTypes[r][c] : ORB_TYPES[Math.floor(Math.random() * ORB_TYPES.length)];
           const orb = createOrbElement(type, r, c);
-          boardState.push(orb);
+          gridMatrix[r][c] = orb;
         }
       }
-      updateOrbPositions(false);
+      syncOrbPositions(false);
       resetTimer();
+
+      saveInitialBoardState();
+    }
+
+    function saveInitialBoardState() {
+      currentInitialBoard = [];
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (gridMatrix[r][c]) {
+            currentInitialBoard.push({ type: gridMatrix[r][c].type, row: r, col: c });
+          }
+        }
+      }
+    }
+
+    function retryCurrentBoard() {
+      if (isProcessingCombos || isReplaying) return;
+      boardGrid.innerHTML = '';
+      
+      gridMatrix = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      comboCount = 0;
+      comboDisplay.textContent = '0';
+      recordedFramePath = [];
+
+      currentInitialBoard.forEach(item => {
+        if (item.row < ROWS && item.col < COLS) {
+          const orb = createOrbElement(item.type, item.row, item.col);
+          gridMatrix[item.row][item.col] = orb;
+        }
+      });
+
+      syncOrbPositions(false);
+      resetTimer();
+      sfx.playSwap();
     }
 
     function createOrbElement(type, row, col) {
@@ -679,25 +789,49 @@
       orb.element.innerHTML = ORB_SVGS[newType];
     }
 
-    function updateOrbPositions(animated = true) {
-      boardState.forEach(orb => {
-        if (orb === activeOrb && isDragging) return;
-        const x = orb.col * orbSize + 2;
-        const y = orb.row * orbSize + 2;
+    function syncOrbPositions(animated = true) {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const orb = gridMatrix[r][c];
+          if (orb) {
+            orb.row = r;
+            orb.col = c;
+            if (orb === activeOrb && isDragging) continue;
 
-        if (!animated) {
-          orb.element.style.transition = 'none';
-        } else {
-          orb.element.style.transition = 'left 0.12s cubic-bezier(0.2, 0, 0, 1), top 0.12s cubic-bezier(0.2, 0, 0, 1), transform 0.15s ease-out';
+            const x = c * orbSize + 2;
+            const y = r * orbSize + 2;
+
+            if (!animated) {
+              orb.element.style.transition = 'none';
+            } else {
+              orb.element.style.transition = 'left 0.08s cubic-bezier(0.1, 0, 0, 1), top 0.08s cubic-bezier(0.1, 0, 0, 1)';
+            }
+            orb.element.style.left = `${x}px`;
+            orb.element.style.top = `${y}px`;
+            orb.element.style.zIndex = r * COLS + c;
+          }
         }
-        orb.element.style.left = `${x}px`;
-        orb.element.style.top = `${y}px`;
-        orb.element.style.zIndex = orb.row * COLS + orb.col;
-      });
+      }
+    }
+
+    function cleanupAllListeners() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onPointerUp);
+      window.removeEventListener('touchcancel', onPointerUp);
+
+      window.removeEventListener('pointermove', onEditPaintMove);
+      window.removeEventListener('touchmove', onEditPaintTouchMove);
+      window.removeEventListener('pointerup', onEditPaintEnd);
+      window.removeEventListener('touchend', onEditPaintEnd);
     }
 
     function onPointerDown(e) {
-      if (isProcessingCombos) return;
+      if (isProcessingCombos || isReplaying || isDragging) return;
+      
+      cleanupAllListeners();
       sfx.init();
 
       const rect = boardGrid.getBoundingClientRect();
@@ -709,8 +843,8 @@
 
       if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
 
-      const foundIndex = boardState.findIndex(o => o.row === row && o.col === col);
-      if (foundIndex === -1) return;
+      const orb = gridMatrix[row][col];
+      if (!orb) return;
 
       if (isEditMode) {
         paintOrbAtLocation(clientX, clientY);
@@ -722,18 +856,23 @@
       }
 
       isDragging = true;
-      activeOrb = boardState[foundIndex];
+      activeOrb = orb;
       activeOrb.element.classList.add('dragging');
 
       sfx.playGrab();
       startTimer();
 
+      dragStartTime = Date.now();
+      recordedFramePath = [];
+
       dragPointerMove(clientX, clientY);
 
       window.addEventListener('pointermove', onPointerMove, { passive: false });
-      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointerup', onPointerUp, { once: true });
+      window.addEventListener('pointercancel', onPointerUp, { once: true });
       window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', onPointerUp);
+      window.addEventListener('touchend', onPointerUp, { once: true });
+      window.addEventListener('touchcancel', onPointerUp, { once: true });
     }
 
     function paintOrbAtLocation(clientX, clientY) {
@@ -742,7 +881,7 @@
       const row = Math.floor((clientY - rect.top) / orbSize);
 
       if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
-        const orb = boardState.find(o => o.row === row && o.col === col);
+        const orb = gridMatrix[row][col];
         if (orb && orb.type !== selectedPaintType) {
           changeOrbType(orb, selectedPaintType);
           sfx.playSwap();
@@ -760,10 +899,7 @@
     }
 
     function onEditPaintEnd() {
-      window.removeEventListener('pointermove', onEditPaintMove);
-      window.removeEventListener('touchmove', onEditPaintTouchMove);
-      window.removeEventListener('pointerup', onEditPaintEnd);
-      window.removeEventListener('touchend', onEditPaintEnd);
+      cleanupAllListeners();
     }
 
     function onPointerMove(e) {
@@ -788,23 +924,25 @@
       activeOrb.element.style.left = `${x}px`;
       activeOrb.element.style.top = `${y}px`;
 
+      const relX = clientX - rect.left;
+      const relY = clientY - rect.top;
+      const elapsed = Date.now() - dragStartTime;
+      recordedFramePath.push({ t: elapsed, x: Math.round(relX * 10) / 10, y: Math.round(relY * 10) / 10 });
+
       const centerCol = Math.max(0, Math.min(COLS - 1, Math.floor((clientX - rect.left) / orbSize)));
       const centerRow = Math.max(0, Math.min(ROWS - 1, Math.floor((clientY - rect.top) / orbSize)));
 
       if (centerCol !== activeOrb.col || centerRow !== activeOrb.row) {
-        const targetOrb = boardState.find(o => o.row === centerRow && o.col === centerCol && o !== activeOrb);
-        if (targetOrb) {
-          const tempRow = activeOrb.row;
-          const tempCol = activeOrb.col;
+        const targetOrb = gridMatrix[centerRow][centerCol];
+        if (targetOrb && targetOrb !== activeOrb) {
+          const oldRow = activeOrb.row;
+          const oldCol = activeOrb.col;
 
-          activeOrb.row = targetOrb.row;
-          activeOrb.col = targetOrb.col;
-
-          targetOrb.row = tempRow;
-          targetOrb.col = tempCol;
+          gridMatrix[oldRow][oldCol] = targetOrb;
+          gridMatrix[centerRow][centerCol] = activeOrb;
 
           sfx.playSwap();
-          updateOrbPositions(true);
+          syncOrbPositions(true);
         }
       }
     }
@@ -813,22 +951,47 @@
       if (!isDragging) return;
       isDragging = false;
       stopTimer();
+      cleanupAllListeners();
 
       if (activeOrb) {
         activeOrb.element.classList.remove('dragging');
-        updateOrbPositions(true);
+        syncOrbPositions(true);
         activeOrb = null;
       }
 
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onPointerUp);
+      if (recordedFramePath.length > 1) {
+        saveCurrentReplay();
+      }
 
       processBoardCombos();
     }
 
+    function saveCurrentReplay() {
+      const replayData = {
+        id: Date.now(),
+        date: new Date().toLocaleString(),
+        cols: COLS,
+        rows: ROWS,
+        initialBoard: currentInitialBoard,
+        path: recordedFramePath
+      };
+
+      let saved = [];
+      try {
+        const stored = localStorage.getItem('puzzle_sim_replays');
+        if (stored) saved = JSON.parse(stored);
+      } catch(e){}
+
+      saved.unshift(replayData);
+      if (saved.length > 10) saved.pop();
+
+      try {
+        localStorage.setItem('puzzle_sim_replays', JSON.stringify(saved));
+      } catch(e){}
+    }
+
     function startTimer() {
+      if (isInfiniteTime) return;
       timeRemaining = maxMoveTime;
       updateTimerUI();
 
@@ -851,31 +1014,46 @@
 
     function resetTimer() {
       stopTimer();
-      timeRemaining = maxMoveTime;
+      timeRemaining = isInfiniteTime ? 0 : maxMoveTime;
       updateTimerUI();
     }
 
     function updateTimerUI() {
-      timerText.textContent = `${timeRemaining.toFixed(1)}s`;
-      const percent = (timeRemaining / maxMoveTime) * 100;
-      timerBar.style.width = `${percent}%`;
+      if (isInfiniteTime) {
+        timerText.textContent = '∞';
+        timerSettingLabel.textContent = '制限なし';
+        timerBar.style.width = '100%';
+      } else {
+        timerText.textContent = `${timeRemaining.toFixed(1)}s`;
+        timerSettingLabel.textContent = `${maxMoveTime.toFixed(1)}s`;
+        const percent = (timeRemaining / maxMoveTime) * 100;
+        timerBar.style.width = `${percent}%`;
+      }
     }
 
     function setCustomMoveTime(val) {
-      let numVal = parseFloat(val);
-      if (isNaN(numVal) || numVal < 0.5) numVal = 0.5;
-      if (numVal > 60) numVal = 60;
+      if (val === 'inf') {
+        isInfiniteTime = true;
+        timeInput.value = '制限なし';
+        timeUnitLabel.style.display = 'none';
+        timeSlider.value = 30;
+      } else {
+        let numVal = parseFloat(val);
+        if (isNaN(numVal) || numVal < 0.5) numVal = 0.5;
+        if (numVal > 60) numVal = 60;
 
-      maxMoveTime = numVal;
-      timeInput.value = numVal;
-      timeSlider.value = Math.min(numVal, 30);
-      timerSettingLabel.textContent = `${numVal.toFixed(1)}s`;
+        isInfiniteTime = false;
+        maxMoveTime = numVal;
+        timeInput.value = numVal;
+        timeUnitLabel.style.display = 'inline';
+        timeSlider.value = Math.min(numVal, 30);
+      }
 
       timeBtns.forEach(b => {
-        if (parseFloat(b.dataset.time) === numVal) {
-          b.className = 'time-btn flex-1 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[10px]';
+        if (b.dataset.time === val) {
+          b.className = 'time-btn flex-1 py-0.5 rounded bg-amber-500 text-slate-900 font-bold text-[9px]';
         } else {
-          b.className = 'time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[10px]';
+          b.className = 'time-btn flex-1 py-0.5 rounded bg-slate-800 text-slate-300 font-bold text-[9px]';
         }
       });
 
@@ -883,21 +1061,14 @@
     }
 
     function findMatches() {
-      const grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-      boardState.forEach(orb => {
-        if (orb.row >= 0 && orb.row < ROWS && orb.col >= 0 && orb.col < COLS) {
-          grid[orb.row][orb.col] = orb;
-        }
-      });
-
       const horizontalMatches = [];
       const verticalMatches = [];
 
       for (let r = 0; r < ROWS; r++) {
         let matchLen = 1;
         for (let c = 0; c < COLS; c++) {
-          const current = grid[r][c];
-          const next = c < COLS - 1 ? grid[r][c + 1] : null;
+          const current = gridMatrix[r][c];
+          const next = c < COLS - 1 ? gridMatrix[r][c + 1] : null;
 
           if (current && next && current.type === next.type) {
             matchLen++;
@@ -905,7 +1076,7 @@
             if (matchLen >= 3) {
               const group = [];
               for (let k = 0; k < matchLen; k++) {
-                group.push(grid[r][c - k]);
+                group.push(gridMatrix[r][c - k]);
               }
               horizontalMatches.push(group);
             }
@@ -917,8 +1088,8 @@
       for (let c = 0; c < COLS; c++) {
         let matchLen = 1;
         for (let r = 0; r < ROWS; r++) {
-          const current = grid[r][c];
-          const next = r < ROWS - 1 ? grid[r + 1][c] : null;
+          const current = gridMatrix[r][c];
+          const next = r < ROWS - 1 ? gridMatrix[r + 1][c] : null;
 
           if (current && next && current.type === next.type) {
             matchLen++;
@@ -926,7 +1097,7 @@
             if (matchLen >= 3) {
               const group = [];
               for (let k = 0; k < matchLen; k++) {
-                group.push(grid[r - k][c]);
+                group.push(gridMatrix[r - k][c]);
               }
               verticalMatches.push(group);
             }
@@ -1009,8 +1180,7 @@
             if (orb.element.parentNode) {
               orb.element.parentNode.removeChild(orb.element);
             }
-            const idx = boardState.indexOf(orb);
-            if (idx !== -1) boardState.splice(idx, 1);
+            gridMatrix[orb.row][orb.col] = null;
           });
 
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -1018,8 +1188,6 @@
 
         await applyGravity();
 
-        // 落ちコンなし設定の場合、もし盤面内での連鎖（落とし消し）がこれ以上なくなったら、
-        // 最後に一度だけランダムなドロップを補充してループを抜ける
         if (noSkyfall) {
           const nextMatches = findMatches();
           if (nextMatches.length === 0) {
@@ -1027,7 +1195,6 @@
             break;
           }
         } else {
-          // 通常時は通常の落ちコン補充処理
           await spawnSkyfallOrbs();
         }
       }
@@ -1062,11 +1229,13 @@
       for (let c = 0; c < COLS; c++) {
         let emptyRows = 0;
         for (let r = ROWS - 1; r >= 0; r--) {
-          const orb = boardState.find(o => o.col === c && o.row === r);
-          if (!orb) {
+          if (gridMatrix[r][c] === null) {
             emptyRows++;
           } else if (emptyRows > 0) {
-            orb.row += emptyRows;
+            const orb = gridMatrix[r][c];
+            gridMatrix[r + emptyRows][c] = orb;
+            gridMatrix[r][c] = null;
+            orb.row = r + emptyRows;
             moved = true;
           }
         }
@@ -1074,35 +1243,137 @@
 
       if (moved) {
         sfx.playDrop();
-        updateOrbPositions(true);
+        syncOrbPositions(true);
         await new Promise(resolve => setTimeout(resolve, 180));
       }
     }
 
     async function spawnSkyfallOrbs() {
-      const newOrbs = [];
+      let spawned = false;
 
       for (let c = 0; c < COLS; c++) {
-        const columnOrbs = boardState.filter(o => o.col === c);
-        const missingCount = ROWS - columnOrbs.length;
+        let emptyCount = 0;
+        for (let r = 0; r < ROWS; r++) {
+          if (gridMatrix[r][c] === null) emptyCount++;
+        }
 
-        for (let i = 0; i < missingCount; i++) {
-          const targetRow = missingCount - 1 - i;
-          const type = ORB_TYPES[Math.floor(Math.random() * ORB_TYPES.length)];
-          
-          const orb = createOrbElement(type, -1 - i, c);
-          orb.row = targetRow;
-          newOrbs.push(orb);
-          boardState.push(orb);
+        for (let r = 0; r < ROWS; r++) {
+          if (gridMatrix[r][c] === null) {
+            const type = ORB_TYPES[Math.floor(Math.random() * ORB_TYPES.length)];
+            const orb = createOrbElement(type, r, c);
+            gridMatrix[r][c] = orb;
+            spawned = true;
+          }
         }
       }
 
-      if (newOrbs.length > 0) {
+      if (spawned) {
         await new Promise(resolve => setTimeout(resolve, 40));
         sfx.playDrop();
-        updateOrbPositions(true);
+        syncOrbPositions(true);
         await new Promise(resolve => setTimeout(resolve, 220));
       }
+    }
+
+    async function loadAndPlayReplay(replay) {
+      if (isProcessingCombos || isReplaying) return;
+      isReplaying = true;
+      replayStatusBadge.classList.remove('hidden');
+      replayModal.classList.add('hidden');
+
+      COLS = replay.cols;
+      ROWS = replay.rows;
+      calculateOrbSize();
+
+      boardGrid.innerHTML = '';
+      
+      gridMatrix = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      comboCount = 0;
+      comboDisplay.textContent = '0';
+
+      replay.initialBoard.forEach(item => {
+        if (item.row < ROWS && item.col < COLS) {
+          const orb = createOrbElement(item.type, item.row, item.col);
+          gridMatrix[item.row][item.col] = orb;
+        }
+      });
+
+      syncOrbPositions(false);
+      resetTimer();
+
+      await new Promise(r => setTimeout(r, 600));
+
+      if (!replay.path || replay.path.length === 0) {
+        isReplaying = false;
+        replayStatusBadge.classList.add('hidden');
+        processBoardCombos();
+        return;
+      }
+
+      const firstPt = replay.path[0];
+      const startCol = Math.max(0, Math.min(COLS - 1, Math.floor(firstPt.x / orbSize)));
+      const startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(firstPt.y / orbSize)));
+      
+      const grabbedOrb = gridMatrix[startRow][startCol] || gridMatrix[0][0];
+      grabbedOrb.element.classList.add('dragging');
+      sfx.playGrab();
+
+      const startTime = performance.now();
+      let lastSwapCol = grabbedOrb.col;
+      let lastSwapRow = grabbedOrb.row;
+
+      await new Promise(resolve => {
+        function step(now) {
+          const elapsed = now - startTime;
+          
+          let idx = 0;
+          while (idx < replay.path.length - 1 && replay.path[idx + 1].t <= elapsed) {
+            idx++;
+          }
+
+          const pt = replay.path[idx];
+          const px = pt.x - (orbSize / 2);
+          const py = pt.y - (orbSize / 2);
+
+          grabbedOrb.element.style.left = `${px}px`;
+          grabbedOrb.element.style.top = `${py}px`;
+
+          const curCol = Math.max(0, Math.min(COLS - 1, Math.floor(pt.x / orbSize)));
+          const curRow = Math.max(0, Math.min(ROWS - 1, Math.floor(pt.y / orbSize)));
+
+          if (curCol !== lastSwapCol || curRow !== lastSwapRow) {
+            const targetOrb = gridMatrix[curRow][curCol];
+            if (targetOrb && targetOrb !== grabbedOrb) {
+              const oldRow = grabbedOrb.row;
+              const oldCol = grabbedOrb.col;
+
+              gridMatrix[oldRow][oldCol] = targetOrb;
+              gridMatrix[curRow][curCol] = grabbedOrb;
+
+              sfx.playSwap();
+              syncOrbPositions(true);
+            }
+            lastSwapCol = curCol;
+            lastSwapRow = curRow;
+          }
+
+          if (idx < replay.path.length - 1) {
+            requestAnimationFrame(step);
+          } else {
+            resolve();
+          }
+        }
+        requestAnimationFrame(step);
+      });
+
+      grabbedOrb.element.classList.remove('dragging');
+      syncOrbPositions(true);
+
+      await new Promise(r => setTimeout(r, 200));
+
+      isReplaying = false;
+      replayStatusBadge.classList.add('hidden');
+      processBoardCombos();
     }
 
     btnGameStart.addEventListener('click', (e) => {
@@ -1113,18 +1384,39 @@
       startScreen.style.opacity = '0';
       setTimeout(() => {
         startScreen.style.display = 'none';
+        
+        const urlParams = new URLSearchParams(window.location.hash.substring(1));
+        const replayParam = urlParams.get('replay');
+        if (replayParam) {
+          try {
+            const decoded = JSON.parse(decodeURIComponent(escape(atob(replayParam))));
+            loadAndPlayReplay(decoded);
+            return;
+          } catch(e) {
+            try {
+              const decodedFallback = JSON.parse(atob(replayParam));
+              loadAndPlayReplay(decodedFallback);
+              return;
+            } catch(err) {}
+          }
+        }
+
         initBoard();
       }, 400);
     });
 
     boardGrid.addEventListener('pointerdown', onPointerDown);
 
+    btnRetry.addEventListener('click', () => {
+      retryCurrentBoard();
+    });
+
     btnReset.addEventListener('click', () => {
       initBoard();
     });
 
     btnToggleGrid.addEventListener('click', () => {
-      if (isProcessingCombos) return;
+      if (isProcessingCombos || isReplaying) return;
       if (COLS === 6) {
         COLS = 7;
         ROWS = 6;
@@ -1136,7 +1428,7 @@
     });
 
     btnEditMode.addEventListener('click', () => {
-      if (isProcessingCombos) return;
+      if (isProcessingCombos || isReplaying) return;
       isEditMode = !isEditMode;
 
       if (isEditMode) {
@@ -1149,7 +1441,105 @@
         btnEditMode.innerHTML = '✏️ EDIT MODE (盤面編集)';
         editPalettePanel.classList.add('hidden');
         editPalettePanel.classList.remove('flex');
+        saveInitialBoardState();
       }
+    });
+
+    btnOpenReplays.addEventListener('click', () => {
+      renderReplayList();
+      replayModal.classList.remove('hidden');
+    });
+
+    btnCloseModal.addEventListener('click', () => {
+      replayModal.classList.add('hidden');
+    });
+
+    btnDeleteAllReplays.addEventListener('click', () => {
+      let saved = [];
+      try {
+        const stored = localStorage.getItem('puzzle_sim_replays');
+        if (stored) saved = JSON.parse(stored);
+      } catch(e){}
+
+      if (saved.length === 0) return;
+
+      if (confirm('保存されているすべてのリプレイを削除しますか？')) {
+        localStorage.removeItem('puzzle_sim_replays');
+        renderReplayList();
+      }
+    });
+
+    function renderReplayList() {
+      replayListContainer.innerHTML = '';
+      let saved = [];
+      try {
+        const stored = localStorage.getItem('puzzle_sim_replays');
+        if (stored) saved = JSON.parse(stored);
+      } catch(e){}
+
+      if (saved.length === 0) {
+        replayListContainer.innerHTML = `<div class="text-xs text-slate-400 text-center py-4">保存されたリプレイはありません。<br>パズルを遊ぶと自動保存されます。</div>`;
+        shareUrlInput.value = '';
+        btnDeleteAllReplays.classList.add('hidden');
+        return;
+      }
+
+      btnDeleteAllReplays.classList.remove('hidden');
+
+      saved.forEach((rep, index) => {
+        const item = document.createElement('div');
+        item.className = 'flex justify-between items-center bg-slate-900 border border-slate-700/80 rounded p-2 text-xs';
+        item.innerHTML = `
+          <div class="flex flex-col">
+            <span class="font-bold text-amber-300">リプレイ #${saved.length - index} (${rep.cols}x${rep.rows})</span>
+            <span class="text-[10px] text-slate-400">${rep.date} / フレーム: ${rep.path ? rep.path.length : 0}</span>
+          </div>
+          <div class="flex gap-1">
+            <button class="btn-play-rep px-2.5 py-1 rounded bg-amber-500 text-slate-900 font-bold text-[10px]" data-index="${index}">再生</button>
+            <button class="btn-share-rep px-2.5 py-1 rounded bg-blue-600 text-white font-bold text-[10px]" data-index="${index}">共有リンク</button>
+            <button class="btn-del-rep px-2 py-1 rounded bg-red-900/80 text-red-200 font-bold text-[10px]" data-index="${index}">削除</button>
+          </div>
+        `;
+        replayListContainer.appendChild(item);
+      });
+
+      document.querySelectorAll('.btn-play-rep').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          const rep = saved[idx];
+          loadAndPlayReplay(rep);
+        });
+      });
+
+      document.querySelectorAll('.btn-share-rep').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          const rep = saved[idx];
+          const jsonStr = JSON.stringify(rep);
+          const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+          const shareUrl = `${window.location.origin}${window.location.pathname}#replay=${base64}`;
+          shareUrlInput.value = shareUrl;
+          shareUrlInput.select();
+        });
+      });
+
+      document.querySelectorAll('.btn-del-rep').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          saved.splice(idx, 1);
+          localStorage.setItem('puzzle_sim_replays', JSON.stringify(saved));
+          renderReplayList();
+        });
+      });
+    }
+
+    btnCopyUrl.addEventListener('click', () => {
+      if (!shareUrlInput.value) return;
+      shareUrlInput.select();
+      navigator.clipboard.writeText(shareUrlInput.value).then(() => {
+        btnCopyUrl.textContent = 'コピー完了!';
+        setTimeout(() => btnCopyUrl.textContent = 'コピー', 1500);
+      });
     });
 
     document.querySelectorAll('.palette-item').forEach(item => {
@@ -1163,21 +1553,30 @@
     });
 
     btnFillAll.addEventListener('click', () => {
-      boardState.forEach(orb => {
-        changeOrbType(orb, selectedPaintType);
-      });
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (gridMatrix[r][c]) {
+            changeOrbType(gridMatrix[r][c], selectedPaintType);
+          }
+        }
+      }
       sfx.playSwap();
     });
 
     timeBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const val = parseFloat(e.dataset.time);
+        const val = e.currentTarget.dataset.index || e.currentTarget.dataset.time;
         setCustomMoveTime(val);
       });
     });
 
     timeInput.addEventListener('change', (e) => {
-      setCustomMoveTime(e.target.value);
+      const val = e.target.value.trim();
+      if (val === '制限なし' || val === 'inf' || val === '無限') {
+        setCustomMoveTime('inf');
+      } else {
+        setCustomMoveTime(val);
+      }
     });
 
     timeSlider.addEventListener('input', (e) => {
@@ -1210,11 +1609,15 @@
 
     window.addEventListener('resize', () => {
       calculateOrbSize();
-      boardState.forEach(orb => {
-        orb.element.style.width = `${orbSize - 4}px`;
-        orb.element.style.height = `${orbSize - 4}px`;
-      });
-      updateOrbPositions(false);
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (gridMatrix[r][c]) {
+            gridMatrix[r][c].element.style.width = `${orbSize - 4}px`;
+            gridMatrix[r][c].element.style.height = `${orbSize - 4}px`;
+          }
+        }
+      }
+      syncOrbPositions(false);
     });
   </script>
 </body>
