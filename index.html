@@ -368,7 +368,22 @@
         </div>
       </div>
 
-      <!-- 操作設定パネル（共有リンクでは非表示） -->
+      <!-- 共有閲覧時専用コントロールパネル（もう一度再生 ＆ 落ちコンなしトグル） -->
+      <div id="shared-controls-panel" class="panel-box p-2 hidden flex-col gap-2 border-amber-500/50">
+        <button id="btn-replay-again-shared" class="btn-custom py-2 px-2 text-xs uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-black shadow-lg">
+          ▶️ もう一度再生 (再リプレイ)
+        </button>
+
+        <div class="flex items-center justify-between pt-1 border-t border-slate-700/60">
+          <span class="text-xs font-bold text-slate-200">落ちコンなし</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-no-skyfall-shared">
+            <span class="slider-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 通常操作設定パネル（共有リンクでは非表示） -->
       <div class="panel-box p-1.5 flex flex-col gap-1 interactive-controls-panel">
         <div class="flex flex-col gap-0.5">
           <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
@@ -417,26 +432,21 @@
         </div>
       </div>
 
-      <!-- 操作ボタン（共有リンクでは編集/やり直し/リセット等は非表示） -->
-      <div class="grid grid-cols-2 gap-1">
-        <!-- 共有リンク閲覧時専用の「もう一度再生」ボタン -->
-        <button id="btn-replay-again-shared" class="btn-custom py-2 px-2 text-xs uppercase tracking-wider col-span-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-black shadow-lg hidden">
-          ▶️ もう一度再生 (再リプレイ)
-        </button>
-
-        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1 interactive-controls-panel">
+      <!-- 通常操作ボタン（共有リンクでは非表示） -->
+      <div class="grid grid-cols-2 gap-1 interactive-controls-panel">
+        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
           ✏️ EDIT MODE (盤面編集)
         </button>
-        <button id="btn-retry" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider bg-emerald-700/60 border-emerald-500/60 text-emerald-200 interactive-controls-panel">
+        <button id="btn-retry" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider bg-emerald-700/60 border-emerald-500/60 text-emerald-200">
           ↩️ やり直す
         </button>
-        <button id="btn-reset" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider interactive-controls-panel">
+        <button id="btn-reset" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider">
           🔄 リセット
         </button>
-        <button id="btn-toggle-grid" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 interactive-controls-panel">
+        <button id="btn-toggle-grid" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2">
           📐 6x5 / 7x6 切替
         </button>
-        <button id="btn-open-replays" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 bg-amber-600/40 border-amber-500/60 text-amber-200 interactive-controls-panel">
+        <button id="btn-open-replays" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 bg-amber-600/40 border-amber-500/60 text-amber-200">
           📼 リプレイ管理・共有
         </button>
       </div>
@@ -460,7 +470,7 @@
       </div>
     </div>
 
-    <!-- 盤面メイン表示（共有リンク時も同じ位置に中央配置） -->
+    <!-- 盤面メイン表示（通常時・共有時ともに中央配置） -->
     <div class="flex flex-col items-center mt-1">
       <div id="board-frame" class="board-container">
         <div id="grid-background" class="grid-background"></div>
@@ -693,7 +703,9 @@
     const btnReset = document.getElementById('btn-reset');
     const btnToggleGrid = document.getElementById('btn-toggle-grid');
     const btnEditMode = document.getElementById('btn-edit-mode');
+    const sharedControlsPanel = document.getElementById('shared-controls-panel');
     const btnReplayAgainShared = document.getElementById('btn-replay-again-shared');
+    const toggleNoSkyfallShared = document.getElementById('toggle-no-skyfall-shared');
     const editPalettePanel = document.getElementById('edit-palette-panel');
     const btnFillAll = document.getElementById('btn-fill-all');
     const timeBtns = document.querySelectorAll('.time-btn');
@@ -1309,7 +1321,8 @@
         isSharedView = true;
         document.body.classList.add('shared-view-mode');
         sharedModeBadge.classList.remove('hidden');
-        btnReplayAgainShared.classList.remove('hidden');
+        sharedControlsPanel.classList.remove('hidden');
+        sharedControlsPanel.classList.add('flex');
       }
 
       replayStatusBadge.classList.remove('hidden');
@@ -1625,13 +1638,23 @@
       setCustomMoveTime(e.target.value);
     });
 
-    toggleNoSkyfall.addEventListener('change', (e) => {
-      noSkyfall = e.target.checked;
+    function updateNoSkyfallState(checked) {
+      noSkyfall = checked;
+      toggleNoSkyfall.checked = checked;
+      toggleNoSkyfallShared.checked = checked;
       if (noSkyfall) {
         noSkyfallBadge.classList.remove('hidden');
       } else {
         noSkyfallBadge.classList.add('hidden');
       }
+    }
+
+    toggleNoSkyfall.addEventListener('change', (e) => {
+      updateNoSkyfallState(e.target.checked);
+    });
+
+    toggleNoSkyfallShared.addEventListener('change', (e) => {
+      updateNoSkyfallState(e.target.checked);
     });
 
     toggleBgm.addEventListener('change', (e) => {
