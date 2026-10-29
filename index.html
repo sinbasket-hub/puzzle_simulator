@@ -903,17 +903,6 @@
       dragStartTime = Date.now();
       recordedFramePath = [];
 
-      // 始点グリッドの正確な中心座標を記録
-      const exactStartX = (col + 0.5) * orbSize;
-      const exactStartY = (row + 0.5) * orbSize;
-      recordedFramePath.push({
-        t: 0,
-        nx: Math.round((exactStartX / (orbSize * COLS)) * 1000) / 1000,
-        ny: Math.round((exactStartY / (orbSize * ROWS)) * 1000) / 1000,
-        startRow: row,
-        startCol: col
-      });
-
       dragPointerMove(clientX, clientY);
 
       window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -968,26 +957,30 @@
       if (!isDragging || !activeOrb) return;
 
       const rect = boardGrid.getBoundingClientRect();
-      const x = clientX - rect.left - (orbSize / 2);
-      const y = clientY - rect.top - (orbSize / 2);
+      const rawRelX = clientX - rect.left;
+      const rawRelY = clientY - rect.top;
+      
+      const rawNormX = Math.max(0, Math.min(1, rawRelX / (orbSize * COLS)));
+      const rawNormY = Math.max(0, Math.min(1, rawRelY / (orbSize * ROWS)));
 
-      activeOrb.element.style.left = `${x}px`;
-      activeOrb.element.style.top = `${y}px`;
+      // 再生時と完全に一致させるために、1023階調（10ビット）に量子化してから判定を行う
+      const normX = Math.round(rawNormX * 1023) / 1023;
+      const normY = Math.round(rawNormY * 1023) / 1023;
 
-      const relX = clientX - rect.left;
-      const relY = clientY - rect.top;
+      const relX = normX * orbSize * COLS;
+      const relY = normY * orbSize * ROWS;
+
+      const px = relX - (orbSize / 2);
+      const py = relY - (orbSize / 2);
+
+      activeOrb.element.style.left = `${px + 2}px`;
+      activeOrb.element.style.top = `${py + 2}px`;
+
+      const centerCol = Math.max(0, Math.min(COLS - 1, Math.floor(relX / orbSize)));
+      const centerRow = Math.max(0, Math.min(ROWS - 1, Math.floor(relY / orbSize)));
+
       const elapsed = Date.now() - dragStartTime;
-
-      const normX = Math.round((relX / (orbSize * COLS)) * 1000) / 1000;
-      const normY = Math.round((relY / (orbSize * ROWS)) * 1000) / 1000;
-
-      const lastPt = recordedFramePath[recordedFramePath.length - 1];
-      if (!lastPt || elapsed - lastPt.t >= 20) {
-        recordedFramePath.push({ t: elapsed, nx: normX, ny: normY });
-      }
-
-      const centerCol = Math.max(0, Math.min(COLS - 1, Math.floor((clientX - rect.left) / orbSize)));
-      const centerRow = Math.max(0, Math.min(ROWS - 1, Math.floor((clientY - rect.top) / orbSize)));
+      let crossed = false;
 
       if (centerCol !== activeOrb.col || centerRow !== activeOrb.row) {
         const targetOrb = gridMatrix[centerRow][centerCol];
@@ -1000,7 +993,22 @@
 
           sfx.playSwap();
           syncOrbPositions(true);
+          crossed = true;
         }
+      }
+
+      const lastPt = recordedFramePath[recordedFramePath.length - 1];
+      
+      // 初回、マス移動が発生した瞬間、または30ms経過時に確実に座標を記録する
+      if (!lastPt || crossed || elapsed - lastPt.t >= 30 || (elapsed - lastPt.t) >= 200) {
+        
+        // デルタ時間(dt)が8ビット(255ms)をオーバーフローしないように中間フレームを挿入
+        while (lastPt && (elapsed - recordedFramePath[recordedFramePath.length - 1].t) > 255) {
+            const prevT = recordedFramePath[recordedFramePath.length - 1].t;
+            recordedFramePath.push({ t: prevT + 250, nx: normX, ny: normY });
+        }
+        
+        recordedFramePath.push({ t: elapsed, nx: normX, ny: normY });
       }
     }
 
@@ -1332,7 +1340,7 @@
       }
     }
 
-    // --- 高精度始点グリッド固定 Bit-packing 圧縮 ---
+    // --- 【完全同期版】10ビット絶対座標エンコーダー ---
     function compressReplayToCompactString(rep) {
       const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
       let bitBuf = "";
@@ -1350,26 +1358,24 @@
         pushBits(orbIndexMap[item.type] || 0, 3);
       });
 
-      let lastT = 0, lastX = 0, lastY = 0;
+      let lastT = 0;
       rep.path.forEach((pt, i) => {
-        let xInt = Math.round((pt.nx !== undefined ? pt.nx : pt.x / (orbSize * rep.cols)) * 1000);
-        let yInt = Math.round((pt.ny !== undefined ? pt.ny : pt.y / (orbSize * rep.rows)) * 1000);
+        // 正規化座標(0.0~1.0)を1023階調(10ビット)の整数絶対座標に変換して記録
+        let xInt = Math.max(0, Math.min(1023, Math.round(pt.nx * 1023)));
+        let yInt = Math.max(0, Math.min(1023, Math.round(pt.ny * 1023)));
 
         if (i === 0) {
           pushBits(Math.min(65535, Math.round(pt.t)), 16);
-          pushBits(Math.max(0, Math.min(1000, xInt)), 10);
-          pushBits(Math.max(0, Math.min(1000, yInt)), 10);
-          lastT = pt.t; lastX = xInt; lastY = yInt;
+          pushBits(xInt, 10);
+          pushBits(yInt, 10);
+          lastT = pt.t;
         } else {
+          // 前回からの経過時間を最大255ミリ秒で記録
           let dt = Math.max(0, Math.min(255, Math.round(pt.t - lastT)));
-          let dx = Math.max(-127, Math.min(127, xInt - lastX));
-          let dy = Math.max(-127, Math.min(127, yInt - lastY));
-
           pushBits(dt, 8);
-          pushBits(dx + 128, 8);
-          pushBits(dy + 128, 8);
-
-          lastT = pt.t; lastX = xInt; lastY = yInt;
+          pushBits(xInt, 10);
+          pushBits(yInt, 10);
+          lastT = pt.t;
         }
       });
 
@@ -1404,6 +1410,8 @@
       }
 
       let gridType = readBits(1);
+      if (gridType === null) return null;
+      
       let cols = gridType === 1 ? 7 : 6;
       let rows = gridType === 1 ? 6 : 5;
 
@@ -1428,26 +1436,20 @@
 
       if (firstT !== null && firstX !== null && firstY !== null) {
         let curT = firstT;
-        let curX = firstX;
-        let curY = firstY;
+        path.push({ t: curT, nx: firstX / 1023, ny: firstY / 1023 });
 
-        path.push({ t: curT, nx: curX / 1000, ny: curY / 1000 });
-
-        while (bitIdx + 24 <= bitBuf.length) {
+        while (bitIdx + 28 <= bitBuf.length) {
           let dt = readBits(8);
-          let dx = readBits(8);
-          let dy = readBits(8);
+          let dx = readBits(10);
+          let dy = readBits(10);
 
           if (dt === null || dx === null || dy === null) break;
 
           curT += dt;
-          curX += (dx - 128);
-          curY += (dy - 128);
-
           path.push({
             t: curT,
-            nx: Math.max(0, Math.min(1, curX / 1000)),
-            ny: Math.max(0, Math.min(1, curY / 1000))
+            nx: dx / 1023,
+            ny: dy / 1023
           });
         }
       }
@@ -1529,17 +1531,11 @@
       }
 
       const firstPt = replay.path[0];
-      const relX = firstPt.nx !== undefined ? firstPt.nx * (orbSize * COLS) : firstPt.x;
-      const relY = firstPt.ny !== undefined ? firstPt.ny * (orbSize * ROWS) : firstPt.y;
+      const relX = firstPt.nx * (orbSize * COLS);
+      const relY = firstPt.ny * (orbSize * ROWS);
 
-      let startCol, startRow;
-      if (firstPt.startCol !== undefined && firstPt.startRow !== undefined) {
-        startCol = firstPt.startCol;
-        startRow = firstPt.startRow;
-      } else {
-        startCol = Math.max(0, Math.min(COLS - 1, Math.floor(relX / orbSize)));
-        startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(relY / orbSize)));
-      }
+      const startCol = Math.max(0, Math.min(COLS - 1, Math.floor(relX / orbSize)));
+      const startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(relY / orbSize)));
       
       const grabbedOrb = gridMatrix[startRow][startCol] || gridMatrix[0][0];
       grabbedOrb.element.classList.add('dragging');
@@ -1566,17 +1562,17 @@
             const dur = p1.t - p0.t;
             const ratio = dur > 0 ? Math.max(0, Math.min(1, (elapsed - p0.t) / dur)) : 1;
 
-            const x0 = p0.nx !== undefined ? p0.nx * (orbSize * COLS) : p0.x;
-            const y0 = p0.ny !== undefined ? p0.ny * (orbSize * ROWS) : p0.y;
-            const x1 = p1.nx !== undefined ? p1.nx * (orbSize * COLS) : p1.x;
-            const y1 = p1.ny !== undefined ? p1.ny * (orbSize * ROWS) : p1.y;
+            const x0 = p0.nx * (orbSize * COLS);
+            const y0 = p0.ny * (orbSize * ROWS);
+            const x1 = p1.nx * (orbSize * COLS);
+            const y1 = p1.ny * (orbSize * ROWS);
 
             currRelX = x0 + (x1 - x0) * ratio;
             currRelY = y0 + (y1 - y0) * ratio;
           } else {
             const lastP = replay.path[replay.path.length - 1];
-            currRelX = lastP.nx !== undefined ? lastP.nx * (orbSize * COLS) : lastP.x;
-            currRelY = lastP.ny !== undefined ? lastP.ny * (orbSize * ROWS) : lastP.y;
+            currRelX = lastP.nx * (orbSize * COLS);
+            currRelY = lastP.ny * (orbSize * ROWS);
           }
 
           const px = currRelX - (orbSize / 2);
@@ -1588,6 +1584,7 @@
           const curCol = Math.max(0, Math.min(COLS - 1, Math.floor(currRelX / orbSize)));
           const curRow = Math.max(0, Math.min(ROWS - 1, Math.floor(currRelY / orbSize)));
 
+          // 再生時の完全一致判定
           if (curCol !== lastSwapCol || curRow !== lastSwapRow) {
             const targetOrb = gridMatrix[curRow][curCol];
             if (targetOrb && targetOrb !== grabbedOrb) {
