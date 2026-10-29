@@ -368,7 +368,7 @@
         </div>
       </div>
 
-      <!-- 共有閲覧時専用コントロールパネル（もう一度再生 ＆ 落ちコンなしトグル） -->
+      <!-- 共有閲覧時専用コントロールパネル -->
       <div id="shared-controls-panel" class="panel-box p-2 hidden flex-col gap-2 border-amber-500/50">
         <button id="btn-replay-again-shared" class="btn-custom py-2 px-2 text-xs uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-black shadow-lg">
           ▶️ もう一度再生 (再リプレイ)
@@ -383,7 +383,7 @@
         </div>
       </div>
 
-      <!-- 通常操作設定パネル（共有リンクでは非表示） -->
+      <!-- 通常操作設定パネル -->
       <div class="panel-box p-1.5 flex flex-col gap-1 interactive-controls-panel">
         <div class="flex flex-col gap-0.5">
           <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
@@ -432,7 +432,7 @@
         </div>
       </div>
 
-      <!-- 通常操作ボタン（共有リンクでは非表示） -->
+      <!-- 通常操作ボタン -->
       <div class="grid grid-cols-2 gap-1 interactive-controls-panel">
         <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
           ✏️ EDIT MODE (盤面編集)
@@ -470,7 +470,7 @@
       </div>
     </div>
 
-    <!-- 盤面メイン表示（通常時・共有時ともに中央配置） -->
+    <!-- 盤面メイン表示 -->
     <div class="flex flex-col items-center mt-1">
       <div id="board-frame" class="board-container">
         <div id="grid-background" class="grid-background"></div>
@@ -495,7 +495,7 @@
       </div>
 
       <div class="flex flex-col gap-1.5 pt-2 border-t border-slate-700">
-        <span class="text-[11px] font-bold text-slate-300">🔗 共有リンク (URL):</span>
+        <span class="text-[11px] font-bold text-slate-300">🔗 共有リンク:</span>
         <div class="flex gap-1">
           <input type="text" id="share-url-input" readonly placeholder="リプレイを選択してリンクを生成" 
                  class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none">
@@ -681,6 +681,9 @@
     let dragStartTime = 0;
 
     const ORB_TYPES = ['fire', 'water', 'wood', 'light', 'dark', 'heal'];
+    const TYPE_MAP = { f: 'fire', w: 'water', g: 'wood', l: 'light', d: 'dark', h: 'heal' };
+    const REVERSE_TYPE_MAP = { fire: 'f', water: 'w', wood: 'g', light: 'l', dark: 'd', heal: 'h' };
+
     const TYPE_COLORS = { 
       fire: '#ff5252', 
       water: '#40c4ff', 
@@ -964,7 +967,14 @@
       const relX = clientX - rect.left;
       const relY = clientY - rect.top;
       const elapsed = Date.now() - dragStartTime;
-      recordedFramePath.push({ t: elapsed, x: Math.round(relX * 10) / 10, y: Math.round(relY * 10) / 10 });
+
+      const normX = Math.round((relX / (orbSize * COLS)) * 1000) / 1000;
+      const normY = Math.round((relY / (orbSize * ROWS)) * 1000) / 1000;
+
+      const lastPt = recordedFramePath[recordedFramePath.length - 1];
+      if (!lastPt || elapsed - lastPt.t >= 30) {
+        recordedFramePath.push({ t: elapsed, nx: normX, ny: normY });
+      }
 
       const centerCol = Math.max(0, Math.min(COLS - 1, Math.floor((clientX - rect.left) / orbSize)));
       const centerRow = Math.max(0, Math.min(ROWS - 1, Math.floor((clientY - rect.top) / orbSize)));
@@ -1312,6 +1322,118 @@
       }
     }
 
+    // 差分（デルタ）圧縮処理
+    function compressReplayData(rep) {
+      let bStr = '';
+      rep.initialBoard.forEach(item => {
+        bStr += (REVERSE_TYPE_MAP[item.type] || 'f');
+      });
+
+      let pList = [];
+      let lastT = 0, lastX = 0, lastY = 0;
+
+      if (rep.path && rep.path.length > 0) {
+        rep.path.forEach((pt, i) => {
+          let xInt = Math.round((pt.nx !== undefined ? pt.nx : pt.x / (orbSize * rep.cols)) * 1000);
+          let yInt = Math.round((pt.ny !== undefined ? pt.ny : pt.y / (orbSize * rep.rows)) * 1000);
+          
+          if (i === 0) {
+            pList.push(`${pt.t}_${xInt}_${yInt}`);
+            lastT = pt.t; lastX = xInt; lastY = yInt;
+          } else {
+            pList.push(`${pt.t - lastT}_${xInt - lastX}_${yInt - lastY}`);
+            lastT = pt.t; lastX = xInt; lastY = yInt;
+          }
+        });
+      }
+
+      return {
+        c: rep.cols,
+        r: rep.rows,
+        b: bStr,
+        p: pList.join(',')
+      };
+    }
+
+    function decompressReplayData(comp) {
+      let initialBoard = [];
+      let cols = comp.c || 6;
+      let rows = comp.r || 5;
+
+      if (comp.b && typeof comp.b === 'string') {
+        let idx = 0;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            let char = comp.b[idx++] || 'f';
+            initialBoard.push({
+              type: TYPE_MAP[char] || 'fire',
+              row: r,
+              col: c
+            });
+          }
+        }
+      }
+
+      let path = [];
+      if (comp.p && typeof comp.p === 'string') {
+        let curT = 0, curX = 0, curY = 0;
+        let parts = comp.p.split(',');
+        parts.forEach((p, i) => {
+          let items = p.split('_');
+          if (items.length === 3) {
+            if (i === 0) {
+              curT = parseInt(items[0]);
+              curX = parseInt(items[1]);
+              curY = parseInt(items[2]);
+            } else {
+              curT += parseInt(items[0]);
+              curX += parseInt(items[1]);
+              curY += parseInt(items[2]);
+            }
+            path.push({ t: curT, nx: curX / 1000, ny: curY / 1000 });
+          }
+        });
+      }
+
+      return {
+        cols: cols,
+        rows: rows,
+        initialBoard: initialBoard,
+        path: path
+      };
+    }
+
+    function parseReplayFromHash() {
+      const rawHash = window.location.hash.substring(1);
+      if (!rawHash) return null;
+
+      const urlParams = new URLSearchParams(rawHash);
+      const replayParam = urlParams.get('replay');
+      if (!replayParam) return null;
+
+      try {
+        const jsonStr = decodeURIComponent(escape(atob(replayParam)));
+        const parsed = JSON.parse(jsonStr);
+
+        if (parsed.b) {
+          return decompressReplayData(parsed);
+        } else {
+          return parsed;
+        }
+      } catch(e) {
+        try {
+          const parsedFallback = JSON.parse(atob(replayParam));
+          if (parsedFallback.b) {
+            return decompressReplayData(parsedFallback);
+          } else {
+            return parsedFallback;
+          }
+        } catch(err) {
+          return null;
+        }
+      }
+    }
+
     async function loadAndPlayReplay(replay, isFromSharedUrl = false) {
       if (isProcessingCombos || isReplaying) return;
       isReplaying = true;
@@ -1358,8 +1480,11 @@
       }
 
       const firstPt = replay.path[0];
-      const startCol = Math.max(0, Math.min(COLS - 1, Math.floor(firstPt.x / orbSize)));
-      const startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(firstPt.y / orbSize)));
+      const relX = firstPt.nx !== undefined ? firstPt.nx * (orbSize * COLS) : firstPt.x;
+      const relY = firstPt.ny !== undefined ? firstPt.ny * (orbSize * ROWS) : firstPt.y;
+
+      const startCol = Math.max(0, Math.min(COLS - 1, Math.floor(relX / orbSize)));
+      const startRow = Math.max(0, Math.min(ROWS - 1, Math.floor(relY / orbSize)));
       
       const grabbedOrb = gridMatrix[startRow][startCol] || gridMatrix[0][0];
       grabbedOrb.element.classList.add('dragging');
@@ -1379,14 +1504,17 @@
           }
 
           const pt = replay.path[idx];
-          const px = pt.x - (orbSize / 2);
-          const py = pt.y - (orbSize / 2);
+          const currRelX = pt.nx !== undefined ? pt.nx * (orbSize * COLS) : pt.x;
+          const currRelY = pt.ny !== undefined ? pt.ny * (orbSize * ROWS) : pt.y;
 
-          grabbedOrb.element.style.left = `${px}px`;
-          grabbedOrb.element.style.top = `${py}px`;
+          const px = currRelX - (orbSize / 2);
+          const py = currRelY - (orbSize / 2);
 
-          const curCol = Math.max(0, Math.min(COLS - 1, Math.floor(pt.x / orbSize)));
-          const curRow = Math.max(0, Math.min(ROWS - 1, Math.floor(pt.y / orbSize)));
+          grabbedOrb.element.style.left = `${px + 2}px`;
+          grabbedOrb.element.style.top = `${py + 2}px`;
+
+          const curCol = Math.max(0, Math.min(COLS - 1, Math.floor(currRelX / orbSize)));
+          const curRow = Math.max(0, Math.min(ROWS - 1, Math.floor(currRelY / orbSize)));
 
           if (curCol !== lastSwapCol || curRow !== lastSwapRow) {
             const targetOrb = gridMatrix[curRow][curCol];
@@ -1432,23 +1560,12 @@
       setTimeout(() => {
         startScreen.style.display = 'none';
         
-        const urlParams = new URLSearchParams(window.location.hash.substring(1));
-        const replayParam = urlParams.get('replay');
-        if (replayParam) {
-          try {
-            const decoded = JSON.parse(decodeURIComponent(escape(atob(replayParam))));
-            loadAndPlayReplay(decoded, true);
-            return;
-          } catch(e) {
-            try {
-              const decodedFallback = JSON.parse(atob(replayParam));
-              loadAndPlayReplay(decodedFallback, true);
-              return;
-            } catch(err) {}
-          }
+        const replay = parseReplayFromHash();
+        if (replay) {
+          loadAndPlayReplay(replay, true);
+        } else {
+          initBoard();
         }
-
-        initBoard();
       }, 400);
     });
 
@@ -1546,11 +1663,11 @@
         item.innerHTML = `
           <div class="flex flex-col">
             <span class="font-bold text-amber-300">リプレイ #${saved.length - index} (${rep.cols}x${rep.rows})</span>
-            <span class="text-[10px] text-slate-400">${rep.date} / フレーム: ${rep.path ? rep.path.length : 0}</span>
+            <span class="text-[10px] text-slate-400">${rep.date}</span>
           </div>
           <div class="flex gap-1">
             <button class="btn-play-rep px-2.5 py-1 rounded bg-amber-500 text-slate-900 font-bold text-[10px]" data-index="${index}">再生</button>
-            <button class="btn-share-rep px-2.5 py-1 rounded bg-blue-600 text-white font-bold text-[10px]" data-index="${index}">共有リンク</button>
+            <button class="btn-share-rep px-2.5 py-1 rounded bg-blue-600 text-white font-bold text-[10px]" data-index="${index}">共有リンク作成</button>
             <button class="btn-del-rep px-2 py-1 rounded bg-red-900/80 text-red-200 font-bold text-[10px]" data-index="${index}">削除</button>
           </div>
         `;
@@ -1569,9 +1686,13 @@
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index);
           const rep = saved[idx];
-          const jsonStr = JSON.stringify(rep);
+          const compressed = compressReplayData(rep);
+          const jsonStr = JSON.stringify(compressed);
           const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
-          const shareUrl = `${window.location.origin}${window.location.pathname}#replay=${base64}`;
+          
+          let baseUrl = window.location.href.split('#')[0];
+          const shareUrl = `${baseUrl}#replay=${base64}`;
+
           shareUrlInput.value = shareUrl;
           shareUrlInput.select();
         });
