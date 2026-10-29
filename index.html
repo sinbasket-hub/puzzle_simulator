@@ -166,7 +166,6 @@
     .orb-light { background: radial-gradient(circle at 35% 30%, #ffff8d 0%, #fbc02d 60%, #9a6700 100%); }
     .orb-dark { background: radial-gradient(circle at 35% 30%, #e040fb 0%, #7b1fa2 60%, #4a0072 100%); }
     
-    /* ハート（回復）ドロップを四角形状に変更 */
     .orb-heal { 
       background: radial-gradient(circle at 35% 30%, #ff80ab 0%, #c2185b 60%, #70002b 100%); 
       border-radius: 20%;
@@ -317,6 +316,18 @@
       justify-content: center;
       z-index: 9999;
     }
+
+    /* 共有閲覧モード専用スタイル */
+    body.shared-view-mode .interactive-controls-panel {
+      display: none !important;
+    }
+    body.shared-view-mode .orb {
+      pointer-events: none !important;
+      cursor: default !important;
+    }
+    body.shared-view-mode #board-grid {
+      pointer-events: none !important;
+    }
   </style>
 </head>
 <body class="w-full h-full">
@@ -337,16 +348,17 @@
           </h1>
           <div class="flex items-center gap-1">
             <span id="replay-status-badge" class="hidden text-[9px] bg-amber-600/90 text-amber-100 border border-amber-400 px-1.5 py-0.2 rounded font-bold animate-pulse">🎬 再生中</span>
+            <span id="shared-mode-badge" class="hidden text-[9px] bg-blue-600/90 text-blue-100 border border-blue-400 px-1.5 py-0.2 rounded font-bold">👀 共有リプレイ閲覧</span>
             <span id="no-skyfall-badge" class="hidden text-[9px] bg-red-900/80 text-red-200 border border-red-500/50 px-1 py-0.2 rounded font-bold">落ちコンなし</span>
           </div>
         </div>
 
-        <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
+        <div class="flex justify-between items-center text-[11px] font-bold text-slate-300 interactive-controls-panel">
           <span>タイマー: [<span id="timer-setting-label" class="text-green-400">8.0s</span>]</span>
           <span id="timer-text" class="text-green-400 text-xs font-bold">8.0s</span>
         </div>
 
-        <div class="w-full h-2 bg-slate-900 rounded-full p-0.5 border border-slate-700/80 overflow-hidden">
+        <div class="w-full h-2 bg-slate-900 rounded-full p-0.5 border border-slate-700/80 overflow-hidden interactive-controls-panel">
           <div id="timer-bar" class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full timer-bar-fill w-full"></div>
         </div>
 
@@ -356,7 +368,8 @@
         </div>
       </div>
 
-      <div class="panel-box p-1.5 flex flex-col gap-1">
+      <!-- 操作設定パネル（共有リンクでは非表示） -->
+      <div class="panel-box p-1.5 flex flex-col gap-1 interactive-controls-panel">
         <div class="flex flex-col gap-0.5">
           <div class="flex justify-between items-center text-[11px] font-bold text-slate-300">
             <span>操作時間:</span>
@@ -404,25 +417,31 @@
         </div>
       </div>
 
+      <!-- 操作ボタン（共有リンクでは編集/やり直し/リセット等は非表示） -->
       <div class="grid grid-cols-2 gap-1">
-        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1">
+        <!-- 共有リンク閲覧時専用の「もう一度再生」ボタン -->
+        <button id="btn-replay-again-shared" class="btn-custom py-2 px-2 text-xs uppercase tracking-wider col-span-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 font-black shadow-lg hidden">
+          ▶️ もう一度再生 (再リプレイ)
+        </button>
+
+        <button id="btn-edit-mode" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 text-amber-300 border-amber-500/50 flex items-center justify-center gap-1 interactive-controls-panel">
           ✏️ EDIT MODE (盤面編集)
         </button>
-        <button id="btn-retry" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider bg-emerald-700/60 border-emerald-500/60 text-emerald-200">
+        <button id="btn-retry" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider bg-emerald-700/60 border-emerald-500/60 text-emerald-200 interactive-controls-panel">
           ↩️ やり直す
         </button>
-        <button id="btn-reset" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider">
+        <button id="btn-reset" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider interactive-controls-panel">
           🔄 リセット
         </button>
-        <button id="btn-toggle-grid" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2">
+        <button id="btn-toggle-grid" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 interactive-controls-panel">
           📐 6x5 / 7x6 切替
         </button>
-        <button id="btn-open-replays" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 bg-amber-600/40 border-amber-500/60 text-amber-200">
+        <button id="btn-open-replays" class="btn-custom py-1 px-1 text-[11px] uppercase tracking-wider col-span-2 bg-amber-600/40 border-amber-500/60 text-amber-200 interactive-controls-panel">
           📼 リプレイ管理・共有
         </button>
       </div>
 
-      <div id="edit-palette-panel" class="panel-box p-1.5 hidden flex-col gap-1 border-amber-500/40">
+      <div id="edit-palette-panel" class="panel-box p-1.5 hidden flex-col gap-1 border-amber-500/40 interactive-controls-panel">
         <div class="text-[11px] font-bold text-amber-300 flex justify-between items-center">
           <span>ペイントドロップ選択:</span>
           <button id="btn-fill-all" class="text-[9px] bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-1 py-0.2 rounded">
@@ -441,6 +460,7 @@
       </div>
     </div>
 
+    <!-- 盤面メイン表示（共有リンク時も同じ位置に中央配置） -->
     <div class="flex flex-col items-center mt-1">
       <div id="board-frame" class="board-container">
         <div id="grid-background" class="grid-background"></div>
@@ -635,6 +655,7 @@
     let isProcessingCombos = false;
     let isEditMode = false;
     let isReplaying = false;
+    let isSharedView = false;
     let noSkyfall = false;
     let selectedPaintType = 'fire';
     let activeOrb = null;
@@ -646,6 +667,7 @@
 
     let currentInitialBoard = [];
     let recordedFramePath = [];
+    let lastLoadedReplay = null;
     let dragStartTime = 0;
 
     const ORB_TYPES = ['fire', 'water', 'wood', 'light', 'dark', 'heal'];
@@ -671,6 +693,7 @@
     const btnReset = document.getElementById('btn-reset');
     const btnToggleGrid = document.getElementById('btn-toggle-grid');
     const btnEditMode = document.getElementById('btn-edit-mode');
+    const btnReplayAgainShared = document.getElementById('btn-replay-again-shared');
     const editPalettePanel = document.getElementById('edit-palette-panel');
     const btnFillAll = document.getElementById('btn-fill-all');
     const timeBtns = document.querySelectorAll('.time-btn');
@@ -682,6 +705,7 @@
     const songBtns = document.querySelectorAll('.song-btn');
     const noSkyfallBadge = document.getElementById('no-skyfall-badge');
     const replayStatusBadge = document.getElementById('replay-status-badge');
+    const sharedModeBadge = document.getElementById('shared-mode-badge');
     const btnOpenReplays = document.getElementById('btn-open-replays');
     const replayModal = document.getElementById('replay-modal');
     const btnCloseModal = document.getElementById('btn-close-modal');
@@ -710,7 +734,7 @@
     }
 
     function initBoard(presetTypes = null) {
-      if (isProcessingCombos || isReplaying) return;
+      if (isProcessingCombos || isReplaying || isSharedView) return;
       calculateOrbSize();
       boardGrid.innerHTML = '';
       
@@ -744,7 +768,7 @@
     }
 
     function retryCurrentBoard() {
-      if (isProcessingCombos || isReplaying) return;
+      if (isProcessingCombos || isReplaying || isSharedView) return;
       boardGrid.innerHTML = '';
       
       gridMatrix = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
@@ -829,7 +853,7 @@
     }
 
     function onPointerDown(e) {
-      if (isProcessingCombos || isReplaying || isDragging) return;
+      if (isProcessingCombos || isReplaying || isDragging || isSharedView) return;
       
       cleanupAllListeners();
       sfx.init();
@@ -876,6 +900,7 @@
     }
 
     function paintOrbAtLocation(clientX, clientY) {
+      if (isSharedView) return;
       const rect = boardGrid.getBoundingClientRect();
       const col = Math.floor((clientX - rect.left) / orbSize);
       const row = Math.floor((clientY - rect.top) / orbSize);
@@ -959,7 +984,7 @@
         activeOrb = null;
       }
 
-      if (recordedFramePath.length > 1) {
+      if (recordedFramePath.length > 1 && !isSharedView) {
         saveCurrentReplay();
       }
 
@@ -991,7 +1016,7 @@
     }
 
     function startTimer() {
-      if (isInfiniteTime) return;
+      if (isInfiniteTime || isSharedView) return;
       timeRemaining = maxMoveTime;
       updateTimerUI();
 
@@ -1275,9 +1300,18 @@
       }
     }
 
-    async function loadAndPlayReplay(replay) {
+    async function loadAndPlayReplay(replay, isFromSharedUrl = false) {
       if (isProcessingCombos || isReplaying) return;
       isReplaying = true;
+      lastLoadedReplay = replay;
+      
+      if (isFromSharedUrl) {
+        isSharedView = true;
+        document.body.classList.add('shared-view-mode');
+        sharedModeBadge.classList.remove('hidden');
+        btnReplayAgainShared.classList.remove('hidden');
+      }
+
       replayStatusBadge.classList.remove('hidden');
       replayModal.classList.add('hidden');
 
@@ -1390,12 +1424,12 @@
         if (replayParam) {
           try {
             const decoded = JSON.parse(decodeURIComponent(escape(atob(replayParam))));
-            loadAndPlayReplay(decoded);
+            loadAndPlayReplay(decoded, true);
             return;
           } catch(e) {
             try {
               const decodedFallback = JSON.parse(atob(replayParam));
-              loadAndPlayReplay(decodedFallback);
+              loadAndPlayReplay(decodedFallback, true);
               return;
             } catch(err) {}
           }
@@ -1415,8 +1449,14 @@
       initBoard();
     });
 
+    btnReplayAgainShared.addEventListener('click', () => {
+      if (lastLoadedReplay) {
+        loadAndPlayReplay(lastLoadedReplay, true);
+      }
+    });
+
     btnToggleGrid.addEventListener('click', () => {
-      if (isProcessingCombos || isReplaying) return;
+      if (isProcessingCombos || isReplaying || isSharedView) return;
       if (COLS === 6) {
         COLS = 7;
         ROWS = 6;
@@ -1428,7 +1468,7 @@
     });
 
     btnEditMode.addEventListener('click', () => {
-      if (isProcessingCombos || isReplaying) return;
+      if (isProcessingCombos || isReplaying || isSharedView) return;
       isEditMode = !isEditMode;
 
       if (isEditMode) {
@@ -1446,6 +1486,7 @@
     });
 
     btnOpenReplays.addEventListener('click', () => {
+      if (isSharedView) return;
       renderReplayList();
       replayModal.classList.remove('hidden');
     });
@@ -1507,7 +1548,7 @@
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index);
           const rep = saved[idx];
-          loadAndPlayReplay(rep);
+          loadAndPlayReplay(rep, false);
         });
       });
 
@@ -1553,6 +1594,7 @@
     });
 
     btnFillAll.addEventListener('click', () => {
+      if (isSharedView) return;
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
           if (gridMatrix[r][c]) {
