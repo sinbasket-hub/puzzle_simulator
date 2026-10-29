@@ -317,7 +317,6 @@
       z-index: 9999;
     }
 
-    /* 共有閲覧モード専用スタイル */
     body.shared-view-mode .interactive-controls-panel {
       display: none !important;
     }
@@ -972,7 +971,7 @@
       const normY = Math.round((relY / (orbSize * ROWS)) * 1000) / 1000;
 
       const lastPt = recordedFramePath[recordedFramePath.length - 1];
-      if (!lastPt || elapsed - lastPt.t >= 30) {
+      if (!lastPt || elapsed - lastPt.t >= 25) {
         recordedFramePath.push({ t: elapsed, nx: normX, ny: normY });
       }
 
@@ -1322,77 +1321,120 @@
       }
     }
 
-    // 差分（デルタ）圧縮処理
-    function compressReplayData(rep) {
-      let bStr = '';
-      rep.initialBoard.forEach(item => {
-        bStr += (REVERSE_TYPE_MAP[item.type] || 'f');
-      });
+    // --- 高度Bit-packing / コンパクトURL圧縮モジュール ---
+    function compressReplayToCompactString(rep) {
+      const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+      let bitBuf = "";
 
-      let pList = [];
-      let lastT = 0, lastX = 0, lastY = 0;
-
-      if (rep.path && rep.path.length > 0) {
-        rep.path.forEach((pt, i) => {
-          let xInt = Math.round((pt.nx !== undefined ? pt.nx : pt.x / (orbSize * rep.cols)) * 1000);
-          let yInt = Math.round((pt.ny !== undefined ? pt.ny : pt.y / (orbSize * rep.rows)) * 1000);
-          
-          if (i === 0) {
-            pList.push(`${pt.t}_${xInt}_${yInt}`);
-            lastT = pt.t; lastX = xInt; lastY = yInt;
-          } else {
-            pList.push(`${pt.t - lastT}_${xInt - lastX}_${yInt - lastY}`);
-            lastT = pt.t; lastX = xInt; lastY = yInt;
-          }
-        });
+      function pushBits(val, len) {
+        let s = val.toString(2);
+        while (s.length < len) s = "0" + s;
+        bitBuf += s;
       }
 
-      return {
-        c: rep.cols,
-        r: rep.rows,
-        b: bStr,
-        p: pList.join(',')
-      };
+      // 1. Grid Size (6x5 -> 0, 7x6 -> 1)
+      pushBits((rep.cols === 7 && rep.rows === 6) ? 1 : 0, 1);
+
+      // 2. Initial Board (3 bits per orb: 0-5)
+      const orbIndexMap = { fire: 0, water: 1, wood: 2, light: 3, dark: 4, heal: 5 };
+      rep.initialBoard.forEach(item => {
+        pushBits(orbIndexMap[item.type] || 0, 3);
+      });
+
+      // 3. Path Delta Compression
+      let lastT = 0, lastX = 0, lastY = 0;
+      rep.path.forEach((pt, i) => {
+        let xInt = Math.round((pt.nx !== undefined ? pt.nx : pt.x / (orbSize * rep.cols)) * 500);
+        let yInt = Math.round((pt.ny !== undefined ? pt.ny : pt.y / (orbSize * rep.rows)) * 500);
+
+        let dt = i === 0 ? pt.t : pt.t - lastT;
+        let dx = i === 0 ? xInt : xInt - lastX;
+        let dy = i === 0 ? yInt : yInt - lastY;
+
+        lastT = pt.t; lastX = xInt; lastY = yInt;
+
+        // dt encoding (0..255 ms or fallback)
+        let clampedDt = Math.max(0, Math.min(255, Math.round(dt)));
+        pushBits(clampedDt, 8);
+
+        // dx, dy encoding (Range -127 to 127 offset by +128)
+        let clampedDx = Math.max(-127, Math.min(127, Math.round(dx))) + 128;
+        let clampedDy = Math.max(-127, Math.min(127, Math.round(dy))) + 128;
+        pushBits(clampedDx, 8);
+        pushBits(clampedDy, 8);
+      });
+
+      // Convert bitBuf to Base64URL String
+      let outStr = "";
+      for (let i = 0; i < bitBuf.length; i += 6) {
+        let chunk = bitBuf.substr(i, 6);
+        while (chunk.length < 6) chunk += "0";
+        outStr += B64_CHARS[parseInt(chunk, 2)];
+      }
+
+      return outStr;
     }
 
-    function decompressReplayData(comp) {
-      let initialBoard = [];
-      let cols = comp.c || 6;
-      let rows = comp.r || 5;
+    function decompressCompactString(str) {
+      const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+      let bitBuf = "";
 
-      if (comp.b && typeof comp.b === 'string') {
-        let idx = 0;
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            let char = comp.b[idx++] || 'f';
-            initialBoard.push({
-              type: TYPE_MAP[char] || 'fire',
-              row: r,
-              col: c
-            });
-          }
+      for (let i = 0; i < str.length; i++) {
+        let val = B64_CHARS.indexOf(str[i]);
+        if (val < 0) continue;
+        let s = val.toString(2);
+        while (s.length < 6) s = "0" + s;
+        bitBuf += s;
+      }
+
+      let bitIdx = 0;
+      function readBits(len) {
+        if (bitIdx + len > bitBuf.length) return 0;
+        let val = parseInt(bitBuf.substr(bitIdx, len), 2);
+        bitIdx += len;
+        return val;
+      }
+
+      let gridType = readBits(1);
+      let cols = gridType === 1 ? 7 : 6;
+      let rows = gridType === 1 ? 6 : 5;
+
+      const indexOrbMap = ['fire', 'water', 'wood', 'light', 'dark', 'heal'];
+      let initialBoard = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          let idx = readBits(3);
+          initialBoard.push({
+            type: indexOrbMap[idx] || 'fire',
+            row: r,
+            col: c
+          });
         }
       }
 
       let path = [];
-      if (comp.p && typeof comp.p === 'string') {
-        let curT = 0, curX = 0, curY = 0;
-        let parts = comp.p.split(',');
-        parts.forEach((p, i) => {
-          let items = p.split('_');
-          if (items.length === 3) {
-            if (i === 0) {
-              curT = parseInt(items[0]);
-              curX = parseInt(items[1]);
-              curY = parseInt(items[2]);
-            } else {
-              curT += parseInt(items[0]);
-              curX += parseInt(items[1]);
-              curY += parseInt(items[2]);
-            }
-            path.push({ t: curT, nx: curX / 1000, ny: curY / 1000 });
-          }
+      let curT = 0, curX = 0, curY = 0;
+      let frameCount = 0;
+
+      while (bitIdx + 24 <= bitBuf.length) {
+        let dt = readBits(8);
+        let dx = readBits(8) - 128;
+        let dy = readBits(8) - 128;
+
+        if (frameCount === 0) {
+          curT = dt; curX = dx + 128; curY = dy + 128;
+        } else {
+          curT += dt; curX += dx; curY += dy;
+        }
+
+        path.push({
+          t: curT,
+          nx: Math.max(0, Math.min(1, curX / 500)),
+          ny: Math.max(0, Math.min(1, curY / 500))
         });
+
+        frameCount++;
       }
 
       return {
@@ -1412,22 +1454,14 @@
       if (!replayParam) return null;
 
       try {
-        const jsonStr = decodeURIComponent(escape(atob(replayParam)));
-        const parsed = JSON.parse(jsonStr);
-
-        if (parsed.b) {
-          return decompressReplayData(parsed);
-        } else {
-          return parsed;
+        if (!replayParam.includes('{') && !replayParam.includes('%')) {
+          return decompressCompactString(replayParam);
         }
+        const jsonStr = decodeURIComponent(escape(atob(replayParam)));
+        return JSON.parse(jsonStr);
       } catch(e) {
         try {
-          const parsedFallback = JSON.parse(atob(replayParam));
-          if (parsedFallback.b) {
-            return decompressReplayData(parsedFallback);
-          } else {
-            return parsedFallback;
-          }
+          return decompressCompactString(replayParam);
         } catch(err) {
           return null;
         }
@@ -1686,12 +1720,10 @@
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index);
           const rep = saved[idx];
-          const compressed = compressReplayData(rep);
-          const jsonStr = JSON.stringify(compressed);
-          const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+          const compactStr = compressReplayToCompactString(rep);
           
           let baseUrl = window.location.href.split('#')[0];
-          const shareUrl = `${baseUrl}#replay=${base64}`;
+          const shareUrl = `${baseUrl}#replay=${compactStr}`;
 
           shareUrlInput.value = shareUrl;
           shareUrlInput.select();
