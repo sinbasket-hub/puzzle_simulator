@@ -971,7 +971,7 @@
       const normY = Math.round((relY / (orbSize * ROWS)) * 1000) / 1000;
 
       const lastPt = recordedFramePath[recordedFramePath.length - 1];
-      if (!lastPt || elapsed - lastPt.t >= 25) {
+      if (!lastPt || elapsed - lastPt.t >= 20) {
         recordedFramePath.push({ t: elapsed, nx: normX, ny: normY });
       }
 
@@ -1321,50 +1321,47 @@
       }
     }
 
-    // --- 高度Bit-packing / コンパクトURL圧縮モジュール ---
+    // --- 超可変Bit-packing & 高精度連続軌跡復元エンジン ---
     function compressReplayToCompactString(rep) {
       const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
       let bitBuf = "";
 
       function pushBits(val, len) {
-        let s = val.toString(2);
+        let s = (val >>> 0).toString(2);
         while (s.length < len) s = "0" + s;
         bitBuf += s;
       }
 
-      // 1. Grid Size (6x5 -> 0, 7x6 -> 1)
       pushBits((rep.cols === 7 && rep.rows === 6) ? 1 : 0, 1);
 
-      // 2. Initial Board (3 bits per orb: 0-5)
       const orbIndexMap = { fire: 0, water: 1, wood: 2, light: 3, dark: 4, heal: 5 };
       rep.initialBoard.forEach(item => {
         pushBits(orbIndexMap[item.type] || 0, 3);
       });
 
-      // 3. Path Delta Compression
       let lastT = 0, lastX = 0, lastY = 0;
       rep.path.forEach((pt, i) => {
-        let xInt = Math.round((pt.nx !== undefined ? pt.nx : pt.x / (orbSize * rep.cols)) * 500);
-        let yInt = Math.round((pt.ny !== undefined ? pt.ny : pt.y / (orbSize * rep.rows)) * 500);
+        let xInt = Math.round((pt.nx !== undefined ? pt.nx : pt.x / (orbSize * rep.cols)) * 1000);
+        let yInt = Math.round((pt.ny !== undefined ? pt.ny : pt.y / (orbSize * rep.rows)) * 1000);
 
-        let dt = i === 0 ? pt.t : pt.t - lastT;
-        let dx = i === 0 ? xInt : xInt - lastX;
-        let dy = i === 0 ? yInt : yInt - lastY;
+        if (i === 0) {
+          pushBits(Math.min(65535, Math.round(pt.t)), 16);
+          pushBits(Math.max(0, Math.min(1000, xInt)), 10);
+          pushBits(Math.max(0, Math.min(1000, yInt)), 10);
+          lastT = pt.t; lastX = xInt; lastY = yInt;
+        } else {
+          let dt = Math.max(0, Math.min(255, Math.round(pt.t - lastT)));
+          let dx = Math.max(-127, Math.min(127, xInt - lastX));
+          let dy = Math.max(-127, Math.min(127, yInt - lastY));
 
-        lastT = pt.t; lastX = xInt; lastY = yInt;
+          pushBits(dt, 8);
+          pushBits(dx + 128, 8);
+          pushBits(dy + 128, 8);
 
-        // dt encoding (0..255 ms or fallback)
-        let clampedDt = Math.max(0, Math.min(255, Math.round(dt)));
-        pushBits(clampedDt, 8);
-
-        // dx, dy encoding (Range -127 to 127 offset by +128)
-        let clampedDx = Math.max(-127, Math.min(127, Math.round(dx))) + 128;
-        let clampedDy = Math.max(-127, Math.min(127, Math.round(dy))) + 128;
-        pushBits(clampedDx, 8);
-        pushBits(clampedDy, 8);
+          lastT = pt.t; lastX = xInt; lastY = yInt;
+        }
       });
 
-      // Convert bitBuf to Base64URL String
       let outStr = "";
       for (let i = 0; i < bitBuf.length; i += 6) {
         let chunk = bitBuf.substr(i, 6);
@@ -1389,7 +1386,7 @@
 
       let bitIdx = 0;
       function readBits(len) {
-        if (bitIdx + len > bitBuf.length) return 0;
+        if (bitIdx + len > bitBuf.length) return null;
         let val = parseInt(bitBuf.substr(bitIdx, len), 2);
         bitIdx += len;
         return val;
@@ -1414,27 +1411,34 @@
       }
 
       let path = [];
-      let curT = 0, curX = 0, curY = 0;
-      let frameCount = 0;
+      let firstT = readBits(16);
+      let firstX = readBits(10);
+      let firstY = readBits(10);
 
-      while (bitIdx + 24 <= bitBuf.length) {
-        let dt = readBits(8);
-        let dx = readBits(8) - 128;
-        let dy = readBits(8) - 128;
+      if (firstT !== null && firstX !== null && firstY !== null) {
+        let curT = firstT;
+        let curX = firstX;
+        let curY = firstY;
 
-        if (frameCount === 0) {
-          curT = dt; curX = dx + 128; curY = dy + 128;
-        } else {
-          curT += dt; curX += dx; curY += dy;
+        path.push({ t: curT, nx: curX / 1000, ny: curY / 1000 });
+
+        while (bitIdx + 24 <= bitBuf.length) {
+          let dt = readBits(8);
+          let dx = readBits(8);
+          let dy = readBits(8);
+
+          if (dt === null || dx === null || dy === null) break;
+
+          curT += dt;
+          curX += (dx - 128);
+          curY += (dy - 128);
+
+          path.push({
+            t: curT,
+            nx: Math.max(0, Math.min(1, curX / 1000)),
+            ny: Math.max(0, Math.min(1, curY / 1000))
+          });
         }
-
-        path.push({
-          t: curT,
-          nx: Math.max(0, Math.min(1, curX / 500)),
-          ny: Math.max(0, Math.min(1, curY / 500))
-        });
-
-        frameCount++;
       }
 
       return {
@@ -1537,9 +1541,26 @@
             idx++;
           }
 
-          const pt = replay.path[idx];
-          const currRelX = pt.nx !== undefined ? pt.nx * (orbSize * COLS) : pt.x;
-          const currRelY = pt.ny !== undefined ? pt.ny * (orbSize * ROWS) : pt.y;
+          let currRelX, currRelY;
+
+          if (idx < replay.path.length - 1) {
+            const p0 = replay.path[idx];
+            const p1 = replay.path[idx + 1];
+            const dur = p1.t - p0.t;
+            const ratio = dur > 0 ? Math.max(0, Math.min(1, (elapsed - p0.t) / dur)) : 1;
+
+            const x0 = p0.nx !== undefined ? p0.nx * (orbSize * COLS) : p0.x;
+            const y0 = p0.ny !== undefined ? p0.ny * (orbSize * ROWS) : p0.y;
+            const x1 = p1.nx !== undefined ? p1.nx * (orbSize * COLS) : p1.x;
+            const y1 = p1.ny !== undefined ? p1.ny * (orbSize * ROWS) : p1.y;
+
+            currRelX = x0 + (x1 - x0) * ratio;
+            currRelY = y0 + (y1 - y0) * ratio;
+          } else {
+            const lastP = replay.path[replay.path.length - 1];
+            currRelX = lastP.nx !== undefined ? lastP.nx * (orbSize * COLS) : lastP.x;
+            currRelY = lastP.ny !== undefined ? lastP.ny * (orbSize * ROWS) : lastP.y;
+          }
 
           const px = currRelX - (orbSize / 2);
           const py = currRelY - (orbSize / 2);
@@ -1566,7 +1587,7 @@
             lastSwapRow = curRow;
           }
 
-          if (idx < replay.path.length - 1) {
+          if (elapsed < replay.path[replay.path.length - 1].t) {
             requestAnimationFrame(step);
           } else {
             resolve();
